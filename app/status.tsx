@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, Alert, Linking, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, Alert, Linking, ActivityIndicator, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as SMS from 'expo-sms';
 import { useRideStore, RideStatus } from '../store/useRideStore';
@@ -7,21 +7,68 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function RideStatusScreen() {
     const router = useRouter();
-    const { rideId, status, driverDetails, backendNumber, updateStatus, setDriverDetails, resetRide } = useRideStore();
+    const {
+        rideId,
+        status,
+        driverDetails,
+        backendNumber,
+        updateStatus,
+        setDriverDetails,
+        resetRide,
+        updateCount,
+        canSendUpdate,
+        incrementUpdateCount
+    } = useRideStore();
+
     const [cooldown, setCooldown] = useState(0);
+
+    // Calculate remaining cooldown
+    useEffect(() => {
+        const checkCooldown = () => {
+            if (!canSendUpdate()) {
+                // Set cooldown to 120 seconds (2 minutes)
+                setCooldown(120);
+                const timer = setInterval(() => {
+                    setCooldown((prev) => {
+                        if (prev <= 1) {
+                            clearInterval(timer);
+                            return 0;
+                        }
+                        return prev - 1;
+                    });
+                }, 1000);
+            }
+        };
+        checkCooldown();
+    }, [updateCount]);
 
     const getStatusColor = (s: RideStatus) => {
         switch (s) {
             case 'REQUESTED': return '#eab308';
-            case 'ASSIGNED': return '#3b82f6';
+            case 'BROADCASTING': return '#f59e0b';
+            case 'ACCEPTED': return '#3b82f6';
+            case 'EN_ROUTE': return '#8b5cf6';
             case 'ARRIVED': return '#22c55e';
-            case 'ON_TRIP': return '#a855f7';
+            case 'COMPLETED': return '#10b981';
+            case 'CANCELLED': return '#ef4444';
             default: return '#64748b';
         }
     };
 
+    const getStatusDisplay = (s: RideStatus) => {
+        switch (s) {
+            case 'BROADCASTING': return 'Searching for Drivers...';
+            case 'ACCEPTED': return 'Driver Assigned';
+            case 'EN_ROUTE': return 'Driver En Route';
+            case 'ARRIVED': return 'Driver Arrived';
+            case 'COMPLETED': return 'Trip Completed';
+            case 'CANCELLED': return 'Ride Cancelled';
+            default: return s;
+        }
+    };
+
     const handleCallDriver = () => {
-        if (status === 'ASSIGNED' || status === 'ARRIVED' || status === 'ON_TRIP') {
+        if (status === 'ACCEPTED' || status === 'EN_ROUTE' || status === 'ARRIVED') {
             Linking.openURL(`tel:${backendNumber}`);
         } else {
             Alert.alert('No Driver', 'Driver is not assigned yet.');
@@ -29,7 +76,10 @@ export default function RideStatusScreen() {
     };
 
     const handleUpdateLocation = async () => {
-        if (cooldown > 0) return;
+        if (!canSendUpdate()) {
+            Alert.alert('Update Limit Reached', 'You have reached the maximum number of updates or need to wait for cooldown.');
+            return;
+        }
 
         const isAvailable = await SMS.isAvailableAsync();
         if (isAvailable) {
@@ -39,16 +89,8 @@ export default function RideStatusScreen() {
                 message
             );
             if (result === 'sent' || result === 'unknown') {
-                setCooldown(60);
-                const timer = setInterval(() => {
-                    setCooldown((prev: number) => {
-                        if (prev <= 1) {
-                            clearInterval(timer);
-                            return 0;
-                        }
-                        return prev - 1;
-                    });
-                }, 1000);
+                incrementUpdateCount();
+                Alert.alert('Location Update Sent', 'Your location update has been sent to the driver.');
             }
         }
     };
@@ -61,23 +103,26 @@ export default function RideStatusScreen() {
                 {
                     text: "Driver Assigned",
                     onPress: () => {
-                        updateStatus('ASSIGNED');
+                        updateStatus('ACCEPTED');
                         setDriverDetails({ name: 'John Doe', car: 'Toyota Prius (Red)', eta: '5 mins' });
                     }
+                },
+                {
+                    text: "Driver En Route",
+                    onPress: () => updateStatus('EN_ROUTE')
                 },
                 {
                     text: "Driver Arrived",
                     onPress: () => updateStatus('ARRIVED')
                 },
                 {
-                    text: "Trip Started",
-                    onPress: () => updateStatus('ON_TRIP')
-                },
-                {
                     text: "Trip Completed",
                     onPress: () => {
-                        resetRide();
-                        router.replace('/');
+                        updateStatus('COMPLETED');
+                        setTimeout(() => {
+                            resetRide();
+                            router.replace('/passenger-home');
+                        }, 2000);
                     }
                 },
                 { text: "Cancel", style: "cancel" }
@@ -94,11 +139,20 @@ export default function RideStatusScreen() {
 
             {/* Status Badge */}
             <View style={[styles.statusBadge, { backgroundColor: getStatusColor(status) }]}>
-                <Text style={styles.statusText}>{status}</Text>
+                <Text style={styles.statusText}>{getStatusDisplay(status)}</Text>
             </View>
 
+            {/* Broadcasting State */}
+            {status === 'BROADCASTING' && (
+                <View style={styles.broadcastingCard}>
+                    <ActivityIndicator size="large" color="#f59e0b" />
+                    <Text style={styles.broadcastingText}>Searching for available drivers...</Text>
+                    <Text style={styles.broadcastingHint}>This may take a few moments</Text>
+                </View>
+            )}
+
             {/* Driver Card */}
-            {(status === 'ASSIGNED' || status === 'ARRIVED' || status === 'ON_TRIP') && driverDetails ? (
+            {(status === 'ACCEPTED' || status === 'EN_ROUTE' || status === 'ARRIVED') && driverDetails ? (
                 <View style={styles.driverCard}>
                     <View style={styles.driverInfo}>
                         <Text style={styles.driverName}>🚗 {driverDetails.name}</Text>
@@ -111,7 +165,7 @@ export default function RideStatusScreen() {
                         </TouchableOpacity>
                     </View>
                 </View>
-            ) : (
+            ) : status !== 'BROADCASTING' && status !== 'COMPLETED' && status !== 'CANCELLED' && (
                 <View style={styles.waitingCard}>
                     <ActivityIndicator size="large" color="#007AFF" />
                     <Text style={styles.waitingText}>Waiting for driver...</Text>
@@ -120,15 +174,25 @@ export default function RideStatusScreen() {
 
             {/* Actions */}
             <View style={styles.actions}>
-                <TouchableOpacity
-                    onPress={handleUpdateLocation}
-                    disabled={cooldown > 0}
-                    style={[styles.actionButton, cooldown > 0 && styles.actionButtonDisabled]}
-                >
-                    <Text style={[styles.actionButtonText, cooldown > 0 && styles.actionButtonTextDisabled]}>
-                        {cooldown > 0 ? `Update Location (${cooldown}s)` : '🔄 Request Location Update'}
-                    </Text>
-                </TouchableOpacity>
+                {/* Update Location Button with Anti-Abuse */}
+                {status !== 'COMPLETED' && status !== 'CANCELLED' && (
+                    <View>
+                        <TouchableOpacity
+                            onPress={handleUpdateLocation}
+                            disabled={!canSendUpdate()}
+                            style={[styles.actionButton, !canSendUpdate() && styles.actionButtonDisabled]}
+                        >
+                            <Text style={[styles.actionButtonText, !canSendUpdate() && styles.actionButtonTextDisabled]}>
+                                {cooldown > 0
+                                    ? `Update Location (${cooldown}s)`
+                                    : '🔄 Request Location Update'}
+                            </Text>
+                        </TouchableOpacity>
+                        <Text style={styles.updateCounter}>
+                            Updates: {updateCount}/5 remaining
+                        </Text>
+                    </View>
+                )}
 
                 <TouchableOpacity
                     onPress={simulateIncomingSMS}
@@ -140,7 +204,7 @@ export default function RideStatusScreen() {
                 <TouchableOpacity
                     onPress={() => {
                         resetRide();
-                        router.replace('/');
+                        router.replace('/passenger-home');
                     }}
                     style={styles.cancelButton}
                 >
@@ -181,6 +245,26 @@ const styles = StyleSheet.create({
     statusText: {
         color: '#fff',
         fontWeight: 'bold',
+        fontSize: 14,
+    },
+    broadcastingCard: {
+        backgroundColor: '#fef3c7',
+        padding: 48,
+        borderRadius: 12,
+        marginBottom: 24,
+        alignItems: 'center',
+        borderWidth: 2,
+        borderColor: '#fbbf24',
+    },
+    broadcastingText: {
+        marginTop: 16,
+        color: '#f59e0b',
+        fontSize: 18,
+        fontWeight: '600',
+    },
+    broadcastingHint: {
+        marginTop: 8,
+        color: '#92400e',
         fontSize: 14,
     },
     driverCard: {
@@ -266,6 +350,12 @@ const styles = StyleSheet.create({
     },
     actionButtonTextDisabled: {
         color: '#94a3b8',
+    },
+    updateCounter: {
+        marginTop: 8,
+        fontSize: 12,
+        color: '#64748b',
+        textAlign: 'center',
     },
     debugButton: {
         padding: 16,
