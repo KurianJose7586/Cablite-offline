@@ -65,8 +65,13 @@ export default function PassengerHomeScreen() {
 
         const isAvailable = await SMS.isAvailableAsync();
         if (isAvailable) {
-            const newRideId = Math.floor(100000 + Math.random() * 900000).toString();
-            const message = `REQ ${newRideId} ${location.coords.latitude},${location.coords.longitude}`;
+            // Generate ride ID (6-20 alphanumeric characters)
+            const newRideId = 'R' + Math.floor(100000 + Math.random() * 900000).toString();
+
+            // Format: RIDEREQ|RIDEID|LAT|LNG|DESTINATION
+            // Backend expects: parseSMS(Body) -> { type: 'RIDEREQ', rideId, data: { lat, lng, destination } }
+            const destination = address || 'Current Location';
+            const message = `RIDEREQ|${newRideId}|${location.coords.latitude}|${location.coords.longitude}|${destination}`;
 
             const { result } = await SMS.sendSMSAsync(
                 [backendNumber],

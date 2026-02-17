@@ -101,27 +101,28 @@ export default function SettingsScreen() {
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Configuration</Text>
 
-                    <View style={styles.field}>
-                        <Text style={styles.label}>One-Way SMS Gateway Number</Text>
-                        <TextInput
-                            value={number}
-                            onChangeText={setNumber}
-                            style={styles.input}
-                            placeholder="+1234567890"
-                            keyboardType="phone-pad"
-                        />
-                        <Text style={styles.hint}>The Twilio number or backend service number.</Text>
-                    </View>
+                    <Text style={styles.label}>Your Name</Text>
+                    <TextInput
+                        style={styles.input}
+                        value={name}
+                        onChangeText={setName}
+                        placeholder="Enter your name"
+                        placeholderTextColor="#94a3b8"
+                    />
 
-                    <View style={styles.field}>
-                        <Text style={styles.label}>Your Name</Text>
-                        <TextInput
-                            value={name}
-                            onChangeText={setName}
-                            style={styles.input}
-                            placeholder="John Doe"
-                        />
-                    </View>
+                    <Text style={styles.label}>Backend Number (Twilio)</Text>
+                    <Text style={styles.hint}>
+                        Enter the Twilio phone number that will receive ride requests.
+                        {'\n'}Format: +1234567890 (include country code)
+                    </Text>
+                    <TextInput
+                        style={styles.input}
+                        value={number}
+                        onChangeText={setNumber}
+                        placeholder="+1234567890"
+                        placeholderTextColor="#94a3b8"
+                        keyboardType="phone-pad"
+                    />
                 </View>
 
                 {/* Update Rate Limits */}

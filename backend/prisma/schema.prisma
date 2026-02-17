@@ -1,0 +1,96 @@
+// This is your Prisma schema file
+// Learn more: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  PASSENGER
+  DRIVER
+}
+
+enum DriverStatus {
+  ONLINE
+  OFFLINE
+}
+
+enum RideState {
+  REQUESTED
+  BROADCASTING
+  ACCEPTED
+  EN_ROUTE
+  ARRIVED
+  COMPLETED
+  CANCELLED
+  EXPIRED
+}
+
+model User {
+  id        String   @id @default(uuid())
+  phone     String   @unique
+  role      UserRole
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  driver         Driver?
+  ridesAsPassenger Ride[] @relation("PassengerRides")
+
+  @@index([phone])
+}
+
+model Driver {
+  id                 String        @id @default(uuid())
+  userId             String        @unique
+  status             DriverStatus  @default(OFFLINE)
+  currentLat         Float?
+  currentLng         Float?
+  lastLocationUpdate DateTime?
+  activeRideId       String?       @unique
+
+  // Relations
+  user              User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ridesAsDriver     Ride[] @relation("DriverRides")
+
+  @@index([status])
+  @@index([activeRideId])
+}
+
+model Ride {
+  id                  String    @id // From SMS, e.g., "R123456"
+  passengerId         String
+  driverId            String?
+  
+  // Location
+  pickupLat           Float
+  pickupLng           Float
+  destinationText     String
+  
+  // State
+  state               RideState @default(REQUESTED)
+  
+  // Timestamps
+  createdAt           DateTime  @default(now())
+  acceptedAt          DateTime?
+  completedAt         DateTime?
+  broadcastExpiresAt  DateTime?
+  
+  // Idempotency
+  twilioMessageSid    String?   @unique
+  
+  // Relations
+  passenger           User      @relation("PassengerRides", fields: [passengerId], references: [id])
+  driver              Driver?   @relation("DriverRides", fields: [driverId], references: [id])
+
+  @@index([state])
+  @@index([passengerId])
+  @@index([driverId])
+  @@index([broadcastExpiresAt])
+}

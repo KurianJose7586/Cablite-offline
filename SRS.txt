@@ -1,0 +1,241 @@
+📄 System Requirements Specification (SRS)
+Project: CabLite – Offline-Triggered Ride Dispatch System
+Component: Backend System
+1. System Overview
+CabLite is a dual-role ride dispatch system that enables:
+
+Ride request initiation via SMS
+Driver broadcast & first-accept dispatch model
+Live driver location tracking
+Rate-limited passenger update requests
+Offline-first ride triggering layer
+The backend acts as:
+
+SMS receiver
+Ride matching engine
+Driver broadcast system
+Ride state controller
+Rate limiting authority
+Location tracking aggregator
+2. System Architecture
+High-Level Flow
+Passenger App → SMS → Twilio → Backend
+Backend → Broadcast → Driver Apps
+Driver Accept → Backend Lock
+Backend → SMS Confirmation → Passenger
+Passenger → UPDATE SMS → Backend
+Backend → Driver Location → SMS Reply
+3. Functional Requirements
+3.1 SMS Handling
+FR-1: Ride Request SMS Processing
+Backend must:
+
+Accept incoming SMS via Twilio webhook
+Parse structured format:
+RIDEREQ|RideID|Lat|Lng|Destination
+Validate:
+RideID format
+Latitude/Longitude valid range
+Passenger phone number present
+On success:
+
+Create ride record
+Set state to REQUESTED
+Begin driver broadcast
+FR-2: Update Request SMS
+Format:
+
+UPDATE|RideID
+Backend must:
+
+Validate ride exists
+Validate ride state = ACCEPTED or EN_ROUTE
+Enforce rate limiting
+Retrieve latest driver location
+Respond via SMS
+FR-3: Cancel Request SMS
+Format:
+
+CANCEL|RideID
+Backend must:
+
+Validate ownership (phone matches ride)
+Change state to CANCELLED
+Notify assigned driver (if any)
+3.2 Driver Matching Engine
+FR-4: Nearby Driver Query
+Backend must:
+
+Retrieve drivers within configurable radius (default: 3km)
+Drivers must be:
+ONLINE
+Not currently in active ride
+Sorting priority:
+
+Distance ascending
+Last active timestamp
+FR-5: Broadcast Mechanism
+Backend must:
+
+Send ride offer to top N drivers (default: 5)
+Broadcast via:
+WebSocket
+Firebase Push
+Ride state → BROADCASTING
+FR-6: First Accept Locking
+Backend must:
+
+Lock ride atomically on first ACCEPT
+Change state to ACCEPTED
+Reject other accept attempts
+Notify other drivers: “Ride Taken”
+This must use atomic DB transaction or Redis lock.
+3.3 Ride State Management
+FR-7: Ride State Machine
+Allowed states:
+
+REQUESTED
+BROADCASTING
+ACCEPTED
+EN_ROUTE
+ARRIVED
+COMPLETED
+CANCELLED
+EXPIRED
+State transitions must be validated.
+Example:
+
+REQUESTED → BROADCASTING
+BROADCASTING → ACCEPTED
+ACCEPTED → EN_ROUTE
+EN_ROUTE → ARRIVED
+ARRIVED → COMPLETED
+Invalid transitions must be rejected.
+3.4 Driver Location Tracking
+FR-8: Location Updates
+Driver app must send:
+
+driverId
+lat
+lng
+timestamp
+rideId (if active)
+Frequency:
+
+Every 10–15 seconds (configurable)
+Backend must:
+
+Store latest driver location
+Overwrite previous location
+Use for ETA & update requests
+3.5 Passenger Update Rate Limiting
+FR-9: Update Restrictions
+System must enforce:
+
+Minimum cooldown between updates (default: 2 minutes)
+Maximum updates per ride (default: 5)
+If exceeded:
+
+Return SMS:
+
+Update limit reached. Please wait.
+FR-10: Smart Suppression
+If driver has not moved > 50 meters since last sent update:
+
+Return cached location
+Do not send redundant location data
+4. Non-Functional Requirements
+4.1 Performance
+SMS processing time < 3 seconds
+Driver accept lock resolution < 200 ms
+Location update API < 150 ms
+4.2 Scalability (POC Target)
+System must support:
+
+100 concurrent rides
+1000 registered drivers
+20 SMS requests per minute
+4.3 Reliability
+Ride locking must be atomic
+No duplicate ride assignment
+System must tolerate SMS delays
+All incoming SMS must be idempotent
+4.4 Security
+Validate phone number ownership of ride
+Prevent spoofed UPDATE messages
+Sanitize all inputs
+Protect Twilio webhook with signature validation
+5. Database Schema Requirements
+5.1 Users Table
+Fields:
+
+id
+phone
+role (PASSENGER / DRIVER)
+createdAt
+5.2 Drivers Table
+Fields:
+
+id
+userId
+status (ONLINE/OFFLINE)
+currentLat
+currentLng
+lastLocationUpdate
+activeRideId (nullable)
+5.3 Rides Table
+Fields:
+
+id (RideID)
+passengerId
+driverId (nullable)
+pickupLat
+pickupLng
+destinationText
+state
+createdAt
+acceptedAt
+completedAt
+updateRequestCount
+lastUpdateTimestamp
+6. APIs Required
+Driver APIs
+POST /driver/location
+POST /driver/accept
+POST /driver/status
+Ride APIs
+GET /ride/:id
+POST /ride/state
+Webhook
+POST /webhook/sms
+Must verify Twilio signature.
+7. Timeout & Expiry Rules
+Broadcast expires after 60 seconds
+If no driver accepts → Ride state = EXPIRED
+Notify passenger via SMS
+8. Error Handling
+System must handle:
+
+Invalid RideID
+Duplicate accept attempt
+Driver offline during ride
+Passenger update before assignment
+SMS parsing failure
+All errors must return structured logs.
+9. Logging & Monitoring
+Backend must log:
+
+SMS received
+Ride created
+Driver broadcast events
+Accept attempts
+State transitions
+Rate-limit triggers
+Logs must include timestamps and rideId.
+10. Future Extension Readiness
+Architecture must allow:
+
+Real payment integration
+Real Uber API plug-in
+IVR booking integration
+Government disaster-mode deployment
