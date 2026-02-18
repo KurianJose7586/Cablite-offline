@@ -55,11 +55,18 @@ export class RideService {
             // Transition to BROADCASTING
             await stateMachine.transition(rideId, 'BROADCASTING');
 
-            // Send confirmation SMS
-            await smsService.send(
-                phone,
-                `Ride ${rideId} requested. Searching for nearby drivers...`
-            );
+            // Send confirmation SMS (non-fatal - trial accounts may not be able to send to unverified numbers)
+            try {
+                await smsService.send(
+                    phone,
+                    `Ride ${rideId} requested. Searching for nearby drivers...`
+                );
+            } catch (smsError: any) {
+                logger.warn('Could not send confirmation SMS (non-fatal)', {
+                    to: phone,
+                    error: smsError.message
+                });
+            }
 
             // Emit event for broadcast service
             const { eventBus } = await import('./eventBus');

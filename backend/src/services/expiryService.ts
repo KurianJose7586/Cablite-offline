@@ -43,11 +43,18 @@ export class ExpiryService {
                         data: { completedAt: new Date() }
                     });
 
-                    // Send SMS notification to passenger
-                    await smsService.send(
-                        ride.passenger.phone,
-                        `Ride ${ride.id} expired. No drivers available. Please try again later.`
-                    );
+                    // Send SMS notification to passenger (non-fatal)
+                    try {
+                        await smsService.send(
+                            ride.passenger.phone,
+                            `Ride ${ride.id} expired. No drivers available. Please try again later.`
+                        );
+                    } catch (smsError: any) {
+                        logger.warn('Could not send expiry SMS (non-fatal)', {
+                            to: ride.passenger.phone,
+                            error: smsError.message
+                        });
+                    }
 
                     logger.info('Ride expired', {
                         rideId: ride.id,
