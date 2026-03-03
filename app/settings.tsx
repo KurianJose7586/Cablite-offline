@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Alert, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Alert, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useRideStore } from '../store/useRideStore';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { User, Car, Save, Trash2, Repeat, Info } from 'lucide-react-native';
 
 export default function SettingsScreen() {
     const router = useRouter();
@@ -41,14 +42,9 @@ export default function SettingsScreen() {
                         setUserRole(newRole);
                         Alert.alert('Role Switched', `You are now in ${roleText} mode`);
                         router.back();
-
-                        // Navigate to appropriate home
                         setTimeout(() => {
-                            if (newRole === 'passenger') {
-                                router.replace('/passenger-home');
-                            } else {
-                                router.replace('/driver-home');
-                            }
+                            if (newRole === 'passenger') router.replace('/passenger-home');
+                            else router.replace('/driver-home');
                         }, 100);
                     },
                 },
@@ -75,22 +71,26 @@ export default function SettingsScreen() {
     };
 
     return (
-        <SafeAreaView style={styles.container}>
-            <ScrollView>
-                <Text style={styles.title}>Settings</Text>
+        <SafeAreaView className="flex-1 bg-slate-50">
+            <ScrollView className="px-5 py-2">
+                <Text className="text-3xl font-bold text-slate-800 mb-6">Settings</Text>
 
                 {/* Current Role */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Current Role</Text>
-                    <View style={styles.roleCard}>
-                        <Text style={styles.roleText}>
-                            {userRole === 'passenger' ? '🚕 Passenger Mode' : '🚘 Driver Mode'}
-                        </Text>
+                <View className="mb-6">
+                    <Text className="text-lg font-semibold text-slate-800 mb-3">Current Role</Text>
+                    <View className="bg-white p-6 rounded-[20px] shadow-sm border border-slate-100" style={{ elevation: 2 }}>
+                        <View className="flex-row items-center mb-4">
+                            {userRole === 'passenger' ? <User size={28} color="#4F46E5" className="mr-3" /> : <Car size={28} color="#10B981" className="mr-3" />}
+                            <Text className="text-xl font-bold text-slate-800">
+                                {userRole === 'passenger' ? 'Passenger Mode' : 'Driver Mode'}
+                            </Text>
+                        </View>
                         <TouchableOpacity
                             onPress={handleSwitchRole}
-                            style={styles.switchButton}
+                            className="bg-primary flex-row items-center justify-center py-4 rounded-xl"
                         >
-                            <Text style={styles.switchButtonText}>
+                            <Repeat size={18} color="#fff" className="mr-2" />
+                            <Text className="text-white text-base font-bold">
                                 Switch to {userRole === 'passenger' ? 'Driver' : 'Passenger'}
                             </Text>
                         </TouchableOpacity>
@@ -98,25 +98,24 @@ export default function SettingsScreen() {
                 </View>
 
                 {/* Configuration */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Configuration</Text>
+                <View className="mb-6">
+                    <Text className="text-lg font-semibold text-slate-800 mb-3">Configuration</Text>
 
-                    <Text style={styles.label}>Your Name</Text>
+                    <Text className="text-base font-semibold text-slate-500 mb-2">Your Name</Text>
                     <TextInput
-                        style={styles.input}
+                        className="bg-white border border-slate-200 p-4 rounded-xl text-base text-slate-800 mb-4"
                         value={name}
                         onChangeText={setName}
                         placeholder="Enter your name"
                         placeholderTextColor="#94a3b8"
                     />
 
-                    <Text style={styles.label}>Backend Number (Twilio)</Text>
-                    <Text style={styles.hint}>
-                        Enter the Twilio phone number that will receive ride requests.
-                        {'\n'}Format: +1234567890 (include country code)
+                    <Text className="text-base font-semibold text-slate-500 mb-1">Backend Number (Twilio)</Text>
+                    <Text className="text-xs text-slate-400 mb-2">
+                        Format: +1234567890 (include country code)
                     </Text>
                     <TextInput
-                        style={styles.input}
+                        className="bg-white border border-slate-200 p-4 rounded-xl text-base text-slate-800 mb-2"
                         value={number}
                         onChangeText={setNumber}
                         placeholder="+1234567890"
@@ -126,144 +125,38 @@ export default function SettingsScreen() {
                 </View>
 
                 {/* Update Rate Limits */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Update Rate Limits</Text>
-                    <View style={styles.infoCard}>
-                        <Text style={styles.infoLabel}>Passenger:</Text>
-                        <Text style={styles.infoText}>• Max 5 location updates per ride</Text>
-                        <Text style={styles.infoText}>• 2 minute cooldown between updates</Text>
+                <View className="mb-8">
+                    <Text className="text-lg font-semibold text-slate-800 mb-3">System Information</Text>
+                    <View className="bg-blue-50 p-5 rounded-[20px] border border-blue-100 flex-row">
+                        <Info size={24} color="#3B82F6" className="mr-3 mt-1" />
+                        <View className="flex-1">
+                            <Text className="text-sm font-bold text-slate-800 mb-1">Passenger Rules:</Text>
+                            <Text className="text-sm text-slate-600 mb-3">• Max 5 location updates per ride{"\n"}• 2 min cooldown</Text>
 
-                        <Text style={[styles.infoLabel, { marginTop: 12 }]}>Driver:</Text>
-                        <Text style={styles.infoText}>• GPS sent every 10-15 seconds during ride</Text>
-                        <Text style={styles.infoText}>• Cannot accept multiple rides simultaneously</Text>
+                            <Text className="text-sm font-bold text-slate-800 mb-1">Driver Rules:</Text>
+                            <Text className="text-sm text-slate-600">• GPS sent every 10s{"\n"}• Atomic ride locking</Text>
+                        </View>
                     </View>
                 </View>
 
                 {/* Actions */}
                 <TouchableOpacity
                     onPress={handleSave}
-                    style={styles.saveButton}
+                    className="bg-accent py-5 rounded-2xl flex-row justify-center items-center shadow-sm mb-4"
+                    style={{ elevation: 4 }}
                 >
-                    <Text style={styles.saveButtonText}>Save Settings</Text>
+                    <Save size={20} color="#fff" className="mr-2" />
+                    <Text className="text-white font-bold text-lg">Save Settings</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
                     onPress={handleResetApp}
-                    style={styles.resetButton}
+                    className="py-5 flex-row justify-center items-center mb-8"
                 >
-                    <Text style={styles.resetButtonText}>Reset App</Text>
+                    <Trash2 size={20} color="#EF4444" className="mr-2" />
+                    <Text className="text-danger font-bold text-base">Reset App Data</Text>
                 </TouchableOpacity>
             </ScrollView>
         </SafeAreaView>
     );
 }
-
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#fff',
-        padding: 16,
-    },
-    title: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#1e293b',
-        marginBottom: 24,
-    },
-    section: {
-        marginBottom: 24,
-    },
-    sectionTitle: {
-        fontSize: 18,
-        fontWeight: '600',
-        color: '#1e293b',
-        marginBottom: 12,
-    },
-    roleCard: {
-        backgroundColor: '#f8fafc',
-        padding: 20,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: '#e2e8f0',
-    },
-    roleText: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        color: '#1e293b',
-        marginBottom: 12,
-    },
-    switchButton: {
-        backgroundColor: '#007AFF',
-        paddingVertical: 12,
-        borderRadius: 10,
-    },
-    switchButtonText: {
-        color: '#fff',
-        textAlign: 'center',
-        fontSize: 16,
-        fontWeight: '600',
-    },
-    field: {
-        marginBottom: 16,
-    },
-    label: {
-        color: '#64748b',
-        marginBottom: 8,
-        fontWeight: '600',
-        fontSize: 16,
-    },
-    input: {
-        backgroundColor: '#f8fafc',
-        borderWidth: 1,
-        borderColor: '#e2e8f0',
-        padding: 16,
-        borderRadius: 12,
-        fontSize: 16,
-    },
-    hint: {
-        color: '#94a3b8',
-        fontSize: 12,
-        marginTop: 4,
-    },
-    infoCard: {
-        backgroundColor: '#f0fdf4',
-        padding: 16,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: '#bbf7d0',
-    },
-    infoLabel: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#1e293b',
-        marginBottom: 4,
-    },
-    infoText: {
-        fontSize: 14,
-        color: '#64748b',
-        marginLeft: 8,
-    },
-    saveButton: {
-        backgroundColor: '#007AFF',
-        padding: 16,
-        borderRadius: 12,
-        marginTop: 8,
-    },
-    saveButtonText: {
-        color: '#fff',
-        textAlign: 'center',
-        fontWeight: 'bold',
-        fontSize: 18,
-    },
-    resetButton: {
-        padding: 16,
-        marginTop: 16,
-        marginBottom: 32,
-    },
-    resetButtonText: {
-        color: '#ef4444',
-        textAlign: 'center',
-        fontSize: 16,
-        fontWeight: '600',
-    },
-});

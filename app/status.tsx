@@ -1,32 +1,46 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Alert, Linking, ActivityIndicator, StyleSheet } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, TouchableOpacity, Alert, Linking, ActivityIndicator, Animated } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as SMS from 'expo-sms';
 import { useRideStore, RideStatus } from '../store/useRideStore';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Search, MapPin, CheckCircle, Phone, XCircle, RotateCcw, Crosshair } from 'lucide-react-native';
 
 export default function RideStatusScreen() {
     const router = useRouter();
     const {
-        rideId,
-        status,
-        driverDetails,
-        backendNumber,
-        updateStatus,
-        setDriverDetails,
-        resetRide,
-        updateCount,
-        canSendUpdate,
-        incrementUpdateCount
+        rideId, status, driverDetails, backendNumber, updateStatus,
+        setDriverDetails, resetRide, updateCount, canSendUpdate, incrementUpdateCount
     } = useRideStore();
 
     const [cooldown, setCooldown] = useState(0);
+    const pulseAnim = useRef(new Animated.Value(1)).current;
 
-    // Calculate remaining cooldown
+    // Pulse animation securely implemented with native Animated API
+    useEffect(() => {
+        if (status === 'BROADCASTING') {
+            Animated.loop(
+                Animated.sequence([
+                    Animated.timing(pulseAnim, {
+                        toValue: 1.05,
+                        duration: 800,
+                        useNativeDriver: true,
+                    }),
+                    Animated.timing(pulseAnim, {
+                        toValue: 1,
+                        duration: 800,
+                        useNativeDriver: true,
+                    })
+                ])
+            ).start();
+        } else {
+            pulseAnim.setValue(1);
+        }
+    }, [status]);
+
     useEffect(() => {
         const checkCooldown = () => {
             if (!canSendUpdate()) {
-                // Set cooldown to 120 seconds (2 minutes)
                 setCooldown(120);
                 const timer = setInterval(() => {
                     setCooldown((prev) => {
@@ -42,22 +56,22 @@ export default function RideStatusScreen() {
         checkCooldown();
     }, [updateCount]);
 
-    const getStatusColor = (s: RideStatus) => {
+    const getStatusStyle = (s: RideStatus): { bg: string, text: string, border: string } => {
         switch (s) {
-            case 'REQUESTED': return '#eab308';
-            case 'BROADCASTING': return '#f59e0b';
-            case 'ACCEPTED': return '#3b82f6';
-            case 'EN_ROUTE': return '#8b5cf6';
-            case 'ARRIVED': return '#22c55e';
-            case 'COMPLETED': return '#10b981';
-            case 'CANCELLED': return '#ef4444';
-            default: return '#64748b';
+            case 'REQUESTED': return { bg: 'bg-yellow-100', text: 'text-yellow-700', border: 'border-yellow-200' };
+            case 'BROADCASTING': return { bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-amber-200' };
+            case 'ACCEPTED': return { bg: 'bg-indigo-100', text: 'text-indigo-700', border: 'border-indigo-200' };
+            case 'EN_ROUTE': return { bg: 'bg-purple-100', text: 'text-purple-700', border: 'border-purple-200' };
+            case 'ARRIVED': return { bg: 'bg-emerald-100', text: 'text-emerald-700', border: 'border-emerald-200' };
+            case 'COMPLETED': return { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-200' };
+            case 'CANCELLED': return { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-200' };
+            default: return { bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-200' };
         }
     };
 
-    const getStatusDisplay = (s: RideStatus) => {
+    const getStatusText = (s: RideStatus) => {
         switch (s) {
-            case 'BROADCASTING': return 'Searching for Drivers...';
+            case 'BROADCASTING': return 'Searching for Drivers';
             case 'ACCEPTED': return 'Driver Assigned';
             case 'EN_ROUTE': return 'Driver En Route';
             case 'ARRIVED': return 'Driver Arrived';
@@ -75,7 +89,8 @@ export default function RideStatusScreen() {
         }
     };
 
-    const handleUpdateLocation = async () => {
+    // Re-implemented SMS update location method:
+    const handleUpdateLocationFull = async () => {
         if (!canSendUpdate()) {
             Alert.alert('Update Limit Reached', 'You have reached the maximum number of updates or need to wait for cooldown.');
             return;
@@ -100,280 +115,96 @@ export default function RideStatusScreen() {
             "Simulate SMS",
             "Choose an incoming message type",
             [
-                {
-                    text: "Driver Assigned",
-                    onPress: () => {
-                        updateStatus('ACCEPTED');
-                        setDriverDetails({ name: 'John Doe', car: 'Toyota Prius (Red)', eta: '5 mins' });
-                    }
-                },
-                {
-                    text: "Driver En Route",
-                    onPress: () => updateStatus('EN_ROUTE')
-                },
-                {
-                    text: "Driver Arrived",
-                    onPress: () => updateStatus('ARRIVED')
-                },
-                {
-                    text: "Trip Completed",
-                    onPress: () => {
-                        updateStatus('COMPLETED');
-                        setTimeout(() => {
-                            resetRide();
-                            router.replace('/passenger-home');
-                        }, 2000);
-                    }
-                },
+                { text: "Driver Assigned", onPress: () => { updateStatus('ACCEPTED'); setDriverDetails({ name: 'Jane Driver', car: 'Toyota Prius (Red)', eta: '5 mins' }); } },
+                { text: "Driver En Route", onPress: () => updateStatus('EN_ROUTE') },
+                { text: "Driver Arrived", onPress: () => updateStatus('ARRIVED') },
+                { text: "Trip Completed", onPress: () => { updateStatus('COMPLETED'); setTimeout(() => { resetRide(); router.replace('/passenger-home'); }, 2000); } },
                 { text: "Cancel", style: "cancel" }
             ]
         );
     };
 
+    const st = getStatusStyle(status);
+
     return (
-        <SafeAreaView style={styles.container}>
-            <View style={styles.header}>
-                <Text style={styles.title}>Ride Status</Text>
-                <Text style={styles.subtitle}>Ride ID: {rideId}</Text>
+        <SafeAreaView className="flex-1 bg-slate-50 p-5">
+            <View className="mb-8 mt-2">
+                <Text className="text-3xl font-bold text-slate-800 mb-1">Ride Status</Text>
+                <Text className="text-sm font-semibold text-slate-500 tracking-wide uppercase">ID: {rideId}</Text>
             </View>
 
-            {/* Status Badge */}
-            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(status) }]}>
-                <Text style={styles.statusText}>{getStatusDisplay(status)}</Text>
+            {/* Pill Status Badge */}
+            <View className={`self-start px-5 py-2.5 rounded-full border mb-8 flex-row items-center ${st.bg} ${st.border}`}>
+                {status === 'BROADCASTING' && <Search size={16} color="#B45309" className="mr-2" />}
+                {status === 'COMPLETED' && <CheckCircle size={16} color="#15803D" className="mr-2" />}
+                {status === 'CANCELLED' && <XCircle size={16} color="#B91C1C" className="mr-2" />}
+                {status === 'ACCEPTED' && <CheckCircle size={16} color="#4338CA" className="mr-2" />}
+                <Text className={`font-bold text-sm ${st.text}`}>{getStatusText(status)}</Text>
             </View>
 
-            {/* Broadcasting State */}
+            {/* Content Cards */}
             {status === 'BROADCASTING' && (
-                <View style={styles.broadcastingCard}>
-                    <ActivityIndicator size="large" color="#f59e0b" />
-                    <Text style={styles.broadcastingText}>Searching for available drivers...</Text>
-                    <Text style={styles.broadcastingHint}>This may take a few moments</Text>
-                </View>
+                <Animated.View style={{ transform: [{ scale: pulseAnim }] }} className="bg-amber-50 p-10 rounded-[24px] mb-8 items-center border border-amber-200 shadow-sm">
+                    <ActivityIndicator size="large" color="#F59E0B" />
+                    <Text className="mt-6 color-amber-600 text-xl font-bold text-center">Searching for available drivers...</Text>
+                    <Text className="mt-2 color-amber-700 text-sm opacity-80">This may take a few moments</Text>
+                </Animated.View>
             )}
 
-            {/* Driver Card */}
             {(status === 'ACCEPTED' || status === 'EN_ROUTE' || status === 'ARRIVED') && driverDetails ? (
-                <View style={styles.driverCard}>
-                    <View style={styles.driverInfo}>
-                        <Text style={styles.driverName}>🚗 {driverDetails.name}</Text>
-                        <Text style={styles.driverCar}>{driverDetails.car}</Text>
+                <View className="bg-white p-6 rounded-[24px] mb-8 shadow-sm border border-slate-100" style={{ elevation: 2 }}>
+                    <Text className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Driver Details</Text>
+                    <View className="flex-row items-center justify-between mb-2">
+                        <Text className="text-2xl font-bold text-slate-800">{driverDetails.name}</Text>
                     </View>
-                    <View style={styles.driverFooter}>
-                        <Text style={styles.eta}>ETA: {driverDetails.eta}</Text>
-                        <TouchableOpacity onPress={handleCallDriver} style={styles.callButton}>
-                            <Text style={styles.callButtonText}>📞 Call</Text>
+                    <Text className="text-base text-slate-500 mb-6">{driverDetails.car}</Text>
+                    <View className="h-px bg-slate-100 mb-5" />
+                    <View className="flex-row justify-between items-center">
+                        <Text className="text-lg font-bold text-slate-800">ETA: {driverDetails.eta}</Text>
+                        <TouchableOpacity onPress={handleCallDriver} className="bg-accent px-5 py-3 rounded-xl flex-row items-center shadow-sm">
+                            <Phone size={18} color="#fff" className="mr-2" />
+                            <Text className="text-white font-bold text-base">Call</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
             ) : status !== 'BROADCASTING' && status !== 'COMPLETED' && status !== 'CANCELLED' && (
-                <View style={styles.waitingCard}>
-                    <ActivityIndicator size="large" color="#007AFF" />
-                    <Text style={styles.waitingText}>Waiting for driver...</Text>
+                <View className="bg-slate-100 p-12 rounded-[24px] mb-8 items-center justify-center border border-slate-200 border-dashed">
+                    <ActivityIndicator size="large" color="#4F46E5" />
+                    <Text className="mt-4 text-slate-500 text-base font-semibold">Waiting for updates...</Text>
                 </View>
             )}
 
             {/* Actions */}
-            <View style={styles.actions}>
-                {/* Update Location Button with Anti-Abuse */}
+            <View className="gap-4 flex-1 justify-end pb-8">
                 {status !== 'COMPLETED' && status !== 'CANCELLED' && (
                     <View>
                         <TouchableOpacity
-                            onPress={handleUpdateLocation}
+                            onPress={handleUpdateLocationFull}
                             disabled={!canSendUpdate()}
-                            style={[styles.actionButton, !canSendUpdate() && styles.actionButtonDisabled]}
+                            className={`flex-row items-center justify-center py-4 rounded-xl border ${canSendUpdate() ? 'bg-white border-primary' : 'bg-slate-100 border-slate-300'}`}
                         >
-                            <Text style={[styles.actionButtonText, !canSendUpdate() && styles.actionButtonTextDisabled]}>
-                                {cooldown > 0
-                                    ? `Update Location (${cooldown}s)`
-                                    : '🔄 Request Location Update'}
+                            <Crosshair size={18} color={canSendUpdate() ? "#4F46E5" : "#94a3b8"} className="mr-2" />
+                            <Text className={`font-bold text-base ${canSendUpdate() ? 'text-primary' : 'text-slate-400'}`}>
+                                {cooldown > 0 ? `Update Location (${cooldown}s)` : 'Request Location Update'}
                             </Text>
                         </TouchableOpacity>
-                        <Text style={styles.updateCounter}>
+                        <Text className="mt-2 text-xs font-semibold text-slate-400 text-center">
                             Updates: {updateCount}/5 remaining
                         </Text>
                     </View>
                 )}
 
-                <TouchableOpacity
-                    onPress={simulateIncomingSMS}
-                    style={styles.debugButton}
-                >
-                    <Text style={styles.debugButtonText}>DEBUG: Simulate Incoming SMS</Text>
+                <TouchableOpacity onPress={simulateIncomingSMS} className="py-4 rounded-xl bg-slate-800">
+                    <Text className="text-white text-center font-bold text-base">DEBUG: Simulate App SMS</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                    onPress={() => {
-                        resetRide();
-                        router.replace('/passenger-home');
-                    }}
-                    style={styles.cancelButton}
+                    onPress={() => { resetRide(); router.replace('/passenger-home'); }}
+                    className="py-4"
                 >
-                    <Text style={styles.cancelButtonText}>Cancel Ride</Text>
+                    <Text className="text-danger text-center text-base font-bold">Cancel Ride</Text>
                 </TouchableOpacity>
             </View>
-
         </SafeAreaView>
     );
 }
-
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#fff',
-        padding: 16,
-    },
-    header: {
-        marginBottom: 24,
-    },
-    title: {
-        fontSize: 28,
-        fontWeight: 'bold',
-        color: '#1e293b',
-        marginBottom: 8,
-    },
-    subtitle: {
-        fontSize: 14,
-        color: '#64748b',
-    },
-    statusBadge: {
-        alignSelf: 'flex-start',
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 20,
-        marginBottom: 32,
-    },
-    statusText: {
-        color: '#fff',
-        fontWeight: 'bold',
-        fontSize: 14,
-    },
-    broadcastingCard: {
-        backgroundColor: '#fef3c7',
-        padding: 48,
-        borderRadius: 12,
-        marginBottom: 24,
-        alignItems: 'center',
-        borderWidth: 2,
-        borderColor: '#fbbf24',
-    },
-    broadcastingText: {
-        marginTop: 16,
-        color: '#f59e0b',
-        fontSize: 18,
-        fontWeight: '600',
-    },
-    broadcastingHint: {
-        marginTop: 8,
-        color: '#92400e',
-        fontSize: 14,
-    },
-    driverCard: {
-        backgroundColor: '#f8fafc',
-        padding: 24,
-        borderRadius: 12,
-        marginBottom: 24,
-        borderWidth: 1,
-        borderColor: '#e2e8f0',
-    },
-    driverInfo: {
-        marginBottom: 16,
-    },
-    driverName: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        color: '#1e293b',
-        marginBottom: 4,
-    },
-    driverCar: {
-        fontSize: 16,
-        color: '#64748b',
-    },
-    driverFooter: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginTop: 16,
-        paddingTop: 16,
-        borderTopWidth: 1,
-        borderTopColor: '#e2e8f0',
-    },
-    eta: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#1e293b',
-    },
-    callButton: {
-        backgroundColor: '#22c55e',
-        paddingHorizontal: 20,
-        paddingVertical: 10,
-        borderRadius: 20,
-    },
-    callButtonText: {
-        color: '#fff',
-        fontWeight: 'bold',
-        fontSize: 16,
-    },
-    waitingCard: {
-        backgroundColor: '#f8fafc',
-        padding: 48,
-        borderRadius: 12,
-        marginBottom: 24,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    waitingText: {
-        marginTop: 16,
-        color: '#64748b',
-        fontSize: 16,
-    },
-    actions: {
-        gap: 16,
-    },
-    actionButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 16,
-        borderRadius: 12,
-        backgroundColor: '#fff',
-        borderWidth: 2,
-        borderColor: '#007AFF',
-    },
-    actionButtonDisabled: {
-        backgroundColor: '#f1f5f9',
-        borderColor: '#cbd5e1',
-    },
-    actionButtonText: {
-        fontWeight: '600',
-        color: '#007AFF',
-        fontSize: 16,
-    },
-    actionButtonTextDisabled: {
-        color: '#94a3b8',
-    },
-    updateCounter: {
-        marginTop: 8,
-        fontSize: 12,
-        color: '#64748b',
-        textAlign: 'center',
-    },
-    debugButton: {
-        padding: 16,
-        borderRadius: 12,
-        backgroundColor: '#1e293b',
-    },
-    debugButtonText: {
-        color: '#fff',
-        textAlign: 'center',
-        fontWeight: 'bold',
-        fontSize: 16,
-    },
-    cancelButton: {
-        padding: 16,
-    },
-    cancelButtonText: {
-        color: '#ef4444',
-        textAlign: 'center',
-        fontSize: 16,
-    },
-});

@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Alert, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 import * as SMS from 'expo-sms';
 import { useRideStore } from '../store/useRideStore';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { MapPin, RefreshCw, Car, Settings } from 'lucide-react-native';
 
 export default function PassengerHomeScreen() {
     const router = useRouter();
-    const { rideId, requestRide, backendNumber, status } = useRideStore();
+    const { requestRide, backendNumber, status } = useRideStore();
     const [location, setLocation] = useState<Location.LocationObject | null>(null);
     const [address, setAddress] = useState<string | null>(null);
     const [loadingLocation, setLoadingLocation] = useState(false);
@@ -65,11 +66,8 @@ export default function PassengerHomeScreen() {
 
         const isAvailable = await SMS.isAvailableAsync();
         if (isAvailable) {
-            // Generate ride ID (6-20 alphanumeric characters)
+            // Generate ride ID
             const newRideId = 'R' + Math.floor(100000 + Math.random() * 900000).toString();
-
-            // Format: RIDEREQ|RIDEID|LAT|LNG|DESTINATION
-            // Backend expects: parseSMS(Body) -> { type: 'RIDEREQ', rideId, data: { lat, lng, destination } }
             const destination = address || 'Current Location';
             const message = `RIDEREQ|${newRideId}|${location.coords.latitude}|${location.coords.longitude}|${destination}`;
 
@@ -88,150 +86,56 @@ export default function PassengerHomeScreen() {
     };
 
     return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView className="flex-1 bg-slate-50 p-5">
             {/* Header */}
-            <View style={styles.header}>
+            <View className="flex-row justify-between items-start mb-6 mt-2">
                 <View>
-                    <Text style={styles.title}>CabLite</Text>
-                    <View style={styles.badge}>
-                        <Text style={styles.badgeText}>🚕 Passenger Mode</Text>
+                    <Text className="text-3xl font-bold text-slate-800 mb-2">CabLite</Text>
+                    <View className="bg-primary px-3 py-1.5 rounded-full self-start flex-row items-center">
+                        <Car size={14} color="#ffffff" className="mr-1.5" />
+                        <Text className="text-white text-xs font-semibold tracking-wide">PASSENGER</Text>
                     </View>
                 </View>
-                <TouchableOpacity onPress={() => router.push('/settings')}>
-                    <Text style={styles.linkText}>Settings</Text>
+                <TouchableOpacity onPress={() => router.push('/settings')} className="p-2 border border-slate-200 rounded-full bg-white shadow-sm">
+                    <Settings size={22} color="#64748b" />
                 </TouchableOpacity>
             </View>
 
             {/* Connection Status */}
-            <View style={styles.statusRow}>
-                <View style={styles.statusDot} />
-                <Text style={styles.statusText}>Online</Text>
+            <View className="flex-row items-center mb-6">
+                <View className="w-3 h-3 rounded-full bg-accent mr-3" />
+                <Text className="text-base text-slate-500 font-medium">System Ready</Text>
             </View>
 
             {/* Location Card */}
-            <View style={styles.card}>
-                <View style={styles.cardHeader}>
-                    <Text style={styles.cardTitle}>📍 Current Location</Text>
+            <View className="bg-white p-6 rounded-[20px] mb-8 shadow-sm border border-slate-100" style={{ elevation: 2 }}>
+                <View className="flex-row items-center mb-3">
+                    <MapPin size={22} color="#4F46E5" className="mr-2.5" />
+                    <Text className="text-lg font-semibold text-slate-800">Current Location</Text>
                 </View>
                 {loadingLocation ? (
-                    <ActivityIndicator size="small" color="#007AFF" />
+                    <ActivityIndicator size="small" color="#4F46E5" className="mt-2 text-left self-start" />
                 ) : (
-                    <Text style={styles.locationText}>
+                    <Text className="text-base text-slate-500 mt-1 leading-6">
                         {address || (location ? `${location.coords.latitude.toFixed(4)}, ${location.coords.longitude.toFixed(4)}` : 'Fetching location...')}
                     </Text>
                 )}
-                <TouchableOpacity onPress={fetchLocation} style={styles.refreshButton}>
-                    <Text style={styles.linkText}>Refresh Location</Text>
+                <TouchableOpacity onPress={fetchLocation} className="mt-6 flex-row items-center">
+                    <RefreshCw size={16} color="#4F46E5" className="mr-2" />
+                    <Text className="text-primary text-base font-semibold">Refresh Location</Text>
                 </TouchableOpacity>
             </View>
 
             {/* Request Button */}
-            <View style={styles.buttonContainer}>
+            <View className="flex-1 justify-end pb-8">
                 <TouchableOpacity
                     onPress={handleRequestRide}
-                    style={styles.requestButton}
+                    className="bg-primary py-5 rounded-2xl shadow-sm"
+                    style={{ elevation: 6, shadowColor: '#4F46E5', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 12 }}
                 >
-                    <Text style={styles.requestButtonText}>
-                        Request Ride via SMS
-                    </Text>
+                    <Text className="text-white text-center text-xl font-bold">Request Ride</Text>
                 </TouchableOpacity>
             </View>
         </SafeAreaView>
     );
 }
-
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#fff',
-        padding: 16,
-    },
-    header: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        marginBottom: 24,
-    },
-    title: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#1e293b',
-        marginBottom: 8,
-    },
-    badge: {
-        backgroundColor: '#007AFF',
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 16,
-        alignSelf: 'flex-start',
-    },
-    badgeText: {
-        color: '#fff',
-        fontSize: 12,
-        fontWeight: '600',
-    },
-    linkText: {
-        color: '#007AFF',
-        fontSize: 16,
-    },
-    statusRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 24,
-    },
-    statusDot: {
-        width: 12,
-        height: 12,
-        borderRadius: 6,
-        backgroundColor: '#22c55e',
-        marginRight: 8,
-    },
-    statusText: {
-        color: '#64748b',
-        fontSize: 16,
-    },
-    card: {
-        backgroundColor: '#f8fafc',
-        padding: 24,
-        borderRadius: 12,
-        marginBottom: 32,
-    },
-    cardHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 8,
-    },
-    cardTitle: {
-        fontSize: 18,
-        fontWeight: '600',
-        color: '#1e293b',
-    },
-    locationText: {
-        color: '#64748b',
-        fontSize: 16,
-        marginTop: 8,
-    },
-    refreshButton: {
-        marginTop: 16,
-    },
-    buttonContainer: {
-        flex: 1,
-        justifyContent: 'center',
-    },
-    requestButton: {
-        backgroundColor: '#007AFF',
-        paddingVertical: 20,
-        borderRadius: 12,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 4,
-    },
-    requestButtonText: {
-        color: '#fff',
-        textAlign: 'center',
-        fontSize: 20,
-        fontWeight: 'bold',
-    },
-});

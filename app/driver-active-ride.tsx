@@ -1,136 +1,83 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, Alert, Linking, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, Alert, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 import { useRideStore } from '../store/useRideStore';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { User, Phone, MapPin, Navigation, Map } from 'lucide-react-native';
 
 export default function DriverActiveRideScreen() {
     const router = useRouter();
     const {
-        currentRideAsDriver,
-        status,
-        updateStatus,
-        passengerDetails,
-        setPassengerDetails,
-        completeRideAsDriver,
-        backendNumber
+        currentRideAsDriver, status, updateStatus, passengerDetails,
+        setPassengerDetails, completeRideAsDriver, backendNumber
     } = useRideStore();
 
     const [location, setLocation] = useState<Location.LocationObject | null>(null);
     const gpsIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-    // Redirect if no active ride
     useEffect(() => {
         if (!currentRideAsDriver) {
             router.replace('/driver-home');
         }
     }, [currentRideAsDriver]);
 
-    // Set mock passenger details on mount
     useEffect(() => {
         if (!passengerDetails) {
-            setPassengerDetails({
-                name: 'John Passenger',
-                phone: backendNumber || '+1234567890',
-            });
+            setPassengerDetails({ name: 'John Passenger', phone: backendNumber || '+1234567890' });
         }
     }, []);
 
-    // GPS Tracking - Send location every 10-15 seconds
     useEffect(() => {
         const startGPSTracking = async () => {
             const { status } = await Location.requestForegroundPermissionsAsync();
-            if (status !== 'granted') {
-                Alert.alert('Location permission denied');
-                return;
-            }
+            if (status !== 'granted') return;
 
-            // Initial location
             const initialLocation = await Location.getCurrentPositionAsync({});
             setLocation(initialLocation);
-            console.log('[GPS] Initial location:', initialLocation.coords);
 
-            // Set up interval for continuous tracking
             gpsIntervalRef.current = setInterval(async () => {
                 try {
                     const currentLocation = await Location.getCurrentPositionAsync({});
                     setLocation(currentLocation);
-
-                    // Log to console (placeholder for backend upload)
-                    console.log('[GPS] Location update:', {
-                        rideId: currentRideAsDriver,
-                        latitude: currentLocation.coords.latitude,
-                        longitude: currentLocation.coords.longitude,
-                        timestamp: new Date().toISOString(),
-                    });
                 } catch (error) {
                     console.error('[GPS] Error fetching location:', error);
                 }
-            }, 12000); // 12 seconds
+            }, 12000);
         };
 
-        if (currentRideAsDriver) {
-            startGPSTracking();
-        }
+        if (currentRideAsDriver) startGPSTracking();
 
-        // Cleanup on unmount
         return () => {
-            if (gpsIntervalRef.current) {
-                clearInterval(gpsIntervalRef.current);
-                console.log('[GPS] Tracking stopped');
-            }
+            if (gpsIntervalRef.current) clearInterval(gpsIntervalRef.current);
         };
     }, [currentRideAsDriver]);
 
     const handleNavigate = () => {
-        // Open default maps app with pickup location
-        const coords = '37.7749,-122.4194'; // Mock coordinates
+        const coords = '37.7749,-122.4194';
         const url = `https://www.google.com/maps/dir/?api=1&destination=${coords}`;
         Linking.openURL(url);
     };
 
     const handleCallPassenger = () => {
-        if (passengerDetails?.phone) {
-            Linking.openURL(`tel:${passengerDetails.phone}`);
-        } else {
-            Alert.alert('No phone number', 'Passenger phone number not available');
-        }
+        if (passengerDetails?.phone) Linking.openURL(`tel:${passengerDetails.phone}`);
     };
 
-    const handleMarkAsArrived = () => {
-        updateStatus('ARRIVED');
-        Alert.alert('Status Updated', 'You have arrived at the pickup location');
-    };
-
-    const handleStartTrip = () => {
-        updateStatus('EN_ROUTE');
-        Alert.alert('Trip Started', 'Trip is now in progress');
-    };
-
+    const handleMarkAsArrived = () => updateStatus('ARRIVED');
+    const handleStartTrip = () => updateStatus('EN_ROUTE');
     const handleCompleteTrip = () => {
-        Alert.alert(
-            'Complete Trip',
-            'Are you sure you want to complete this trip?',
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Complete',
-                    onPress: () => {
-                        completeRideAsDriver();
-                        router.replace('/driver-home');
-                    },
-                },
-            ]
-        );
+        Alert.alert('Complete Trip', 'Are you sure you want to complete this trip?', [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Complete', onPress: () => { completeRideAsDriver(); router.replace('/driver-home'); } },
+        ]);
     };
 
-    const getStatusColor = () => {
+    const getStatusStyle = () => {
         switch (status) {
-            case 'ACCEPTED': return '#3b82f6';
-            case 'ARRIVED': return '#22c55e';
-            case 'EN_ROUTE': return '#a855f7';
-            default: return '#64748b';
+            case 'ACCEPTED': return { bg: 'bg-indigo-100', text: 'text-indigo-700' };
+            case 'ARRIVED': return { bg: 'bg-emerald-100', text: 'text-emerald-700' };
+            case 'EN_ROUTE': return { bg: 'bg-indigo-100', text: 'text-indigo-700' };
+            default: return { bg: 'bg-slate-100', text: 'text-slate-700' };
         }
     };
 
@@ -143,214 +90,82 @@ export default function DriverActiveRideScreen() {
         }
     };
 
+    const st = getStatusStyle();
+
     return (
-        <SafeAreaView style={styles.container}>
-            {/* Header */}
-            <View style={styles.header}>
-                <Text style={styles.title}>Active Ride</Text>
-                <Text style={styles.subtitle}>Ride ID: {currentRideAsDriver}</Text>
+        <SafeAreaView className="flex-1 bg-slate-50 p-5">
+            <View className="mb-6 mt-2 flex-row justify-between items-center">
+                <View>
+                    <Text className="text-3xl font-bold text-slate-800 mb-1">Active Ride</Text>
+                    <Text className="text-sm font-semibold text-slate-500 tracking-wide uppercase">ID: {currentRideAsDriver}</Text>
+                </View>
+                <View className={`px-4 py-2 rounded-full ${st.bg}`}>
+                    <Text className={`font-bold text-xs ${st.text}`}>{getStatusText()}</Text>
+                </View>
             </View>
 
-            {/* Status Badge */}
-            <View style={[styles.statusBadge, { backgroundColor: getStatusColor() }]}>
-                <Text style={styles.statusText}>{getStatusText()}</Text>
+            {/* Static Map Placeholder Component */}
+            <View className="h-40 bg-slate-200 rounded-[20px] mb-6 items-center justify-center border border-slate-300 overflow-hidden shadow-sm" style={{ backgroundColor: '#e2e8f0' }}>
+                <Map size={48} color="#94a3b8" className="mb-3 opacity-50" />
+                <Text className="text-slate-500 font-semibold text-sm tracking-wide">MAP VIEW COMMING SOON</Text>
             </View>
 
-            {/* Passenger Info Card */}
+            {/* Passenger Info */}
             {passengerDetails && (
-                <View style={styles.card}>
-                    <Text style={styles.cardTitle}>👤 Passenger Information</Text>
-                    <Text style={styles.passengerName}>{passengerDetails.name}</Text>
-                    <TouchableOpacity
-                        style={styles.callButton}
-                        onPress={handleCallPassenger}
-                    >
-                        <Text style={styles.callButtonText}>📞 Call Passenger</Text>
-                    </TouchableOpacity>
+                <View className="bg-white p-5 rounded-[20px] mb-5 shadow-sm border border-slate-100" style={{ elevation: 2 }}>
+                    <View className="flex-row items-center justify-between">
+                        <View className="flex-row items-center flex-1">
+                            <View className="w-12 h-12 bg-indigo-100 rounded-full items-center justify-center mr-4">
+                                <User size={24} color="#4F46E5" />
+                            </View>
+                            <View>
+                                <Text className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Passenger</Text>
+                                <Text className="text-xl font-bold text-slate-800">{passengerDetails.name}</Text>
+                            </View>
+                        </View>
+                        <TouchableOpacity onPress={handleCallPassenger} className="bg-emerald-100 p-3 rounded-full">
+                            <Phone size={24} color="#10B981" />
+                        </TouchableOpacity>
+                    </View>
                 </View>
             )}
 
-            {/* Pickup Location Card */}
-            <View style={styles.card}>
-                <Text style={styles.cardTitle}>📍 Pickup Location</Text>
-                <Text style={styles.locationText}>123 Main St, Downtown</Text>
-                <Text style={styles.distanceText}>Distance: 2.3 km</Text>
-                <TouchableOpacity
-                    style={styles.navigateButton}
-                    onPress={handleNavigate}
-                >
-                    <Text style={styles.navigateButtonText}>🗺️ Navigate to Pickup</Text>
+            {/* Pickup Location */}
+            <View className="bg-white p-5 rounded-[20px] mb-5 shadow-sm border border-slate-100" style={{ elevation: 2 }}>
+                <View className="flex-row items-start justify-between">
+                    <View className="flex-1">
+                        <Text className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Location</Text>
+                        <Text className="text-lg font-bold text-slate-800 mb-1">123 Main St, Downtown</Text>
+                        <Text className="text-sm text-slate-500 font-semibold">Distance: 2.3 km</Text>
+                    </View>
+                    <MapPin size={24} color="#4F46E5" className="mt-2" />
+                </View>
+                <TouchableOpacity onPress={handleNavigate} className="bg-slate-100 flex-row items-center justify-center py-4 mt-5 rounded-xl border border-slate-200">
+                    <Navigation size={18} color="#4F46E5" className="mr-2" />
+                    <Text className="text-primary font-bold text-base">Navigate to Pickup</Text>
                 </TouchableOpacity>
             </View>
 
-            {/* GPS Tracking Status */}
-            <View style={styles.gpsCard}>
-                <Text style={styles.gpsTitle}>📡 GPS Tracking Active</Text>
-                <Text style={styles.gpsText}>
-                    Location updates every 10-15 seconds
-                </Text>
-                {location && (
-                    <Text style={styles.gpsCoords}>
-                        {location.coords.latitude.toFixed(4)}, {location.coords.longitude.toFixed(4)}
-                    </Text>
-                )}
-            </View>
-
-            {/* Action Buttons */}
-            <View style={styles.actions}>
+            {/* Actions */}
+            <View className="flex-1 justify-end pb-8">
                 {status === 'ACCEPTED' && (
-                    <TouchableOpacity
-                        style={styles.actionButton}
-                        onPress={handleMarkAsArrived}
-                    >
-                        <Text style={styles.actionButtonText}>Mark as Arrived</Text>
+                    <TouchableOpacity onPress={handleMarkAsArrived} className="bg-primary py-5 rounded-xl shadow-sm">
+                        <Text className="text-white text-center text-lg font-bold">Mark as Arrived</Text>
                     </TouchableOpacity>
                 )}
 
                 {status === 'ARRIVED' && (
-                    <TouchableOpacity
-                        style={styles.actionButton}
-                        onPress={handleStartTrip}
-                    >
-                        <Text style={styles.actionButtonText}>Start Trip</Text>
+                    <TouchableOpacity onPress={handleStartTrip} className="bg-primary py-5 rounded-xl shadow-sm">
+                        <Text className="text-white text-center text-lg font-bold">Start Trip</Text>
                     </TouchableOpacity>
                 )}
 
                 {status === 'EN_ROUTE' && (
-                    <TouchableOpacity
-                        style={[styles.actionButton, styles.completeButton]}
-                        onPress={handleCompleteTrip}
-                    >
-                        <Text style={styles.actionButtonText}>Complete Trip</Text>
+                    <TouchableOpacity onPress={handleCompleteTrip} className="bg-accent py-5 rounded-xl shadow-sm">
+                        <Text className="text-white text-center text-lg font-bold">Complete Trip</Text>
                     </TouchableOpacity>
                 )}
             </View>
         </SafeAreaView>
     );
 }
-
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#fff',
-        padding: 16,
-    },
-    header: {
-        marginBottom: 20,
-    },
-    title: {
-        fontSize: 28,
-        fontWeight: 'bold',
-        color: '#1e293b',
-        marginBottom: 4,
-    },
-    subtitle: {
-        fontSize: 14,
-        color: '#64748b',
-    },
-    statusBadge: {
-        alignSelf: 'flex-start',
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 20,
-        marginBottom: 24,
-    },
-    statusText: {
-        color: '#fff',
-        fontWeight: 'bold',
-        fontSize: 14,
-    },
-    card: {
-        backgroundColor: '#f8fafc',
-        padding: 20,
-        borderRadius: 12,
-        marginBottom: 16,
-        borderWidth: 1,
-        borderColor: '#e2e8f0',
-    },
-    cardTitle: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#1e293b',
-        marginBottom: 12,
-    },
-    passengerName: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        color: '#1e293b',
-        marginBottom: 12,
-    },
-    callButton: {
-        backgroundColor: '#22c55e',
-        paddingVertical: 12,
-        borderRadius: 10,
-    },
-    callButtonText: {
-        color: '#fff',
-        textAlign: 'center',
-        fontSize: 16,
-        fontWeight: 'bold',
-    },
-    locationText: {
-        fontSize: 16,
-        color: '#1e293b',
-        marginBottom: 4,
-    },
-    distanceText: {
-        fontSize: 14,
-        color: '#64748b',
-        marginBottom: 12,
-    },
-    navigateButton: {
-        backgroundColor: '#007AFF',
-        paddingVertical: 12,
-        borderRadius: 10,
-    },
-    navigateButtonText: {
-        color: '#fff',
-        textAlign: 'center',
-        fontSize: 16,
-        fontWeight: 'bold',
-    },
-    gpsCard: {
-        backgroundColor: '#f0fdf4',
-        padding: 16,
-        borderRadius: 12,
-        marginBottom: 24,
-        borderWidth: 1,
-        borderColor: '#bbf7d0',
-    },
-    gpsTitle: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#22c55e',
-        marginBottom: 4,
-    },
-    gpsText: {
-        fontSize: 14,
-        color: '#64748b',
-        marginBottom: 4,
-    },
-    gpsCoords: {
-        fontSize: 12,
-        color: '#94a3b8',
-        fontFamily: 'monospace',
-    },
-    actions: {
-        gap: 12,
-    },
-    actionButton: {
-        backgroundColor: '#007AFF',
-        paddingVertical: 16,
-        borderRadius: 12,
-    },
-    completeButton: {
-        backgroundColor: '#22c55e',
-    },
-    actionButtonText: {
-        color: '#fff',
-        textAlign: 'center',
-        fontSize: 18,
-        fontWeight: 'bold',
-    },
-});

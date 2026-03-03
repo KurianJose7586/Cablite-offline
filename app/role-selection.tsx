@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRideStore } from '../store/useRideStore';
+import { User, Car } from 'lucide-react-native';
 
 export default function RoleSelectionScreen() {
     const router = useRouter();
@@ -21,45 +22,47 @@ export default function RoleSelectionScreen() {
     };
 
     return (
-        <SafeAreaView style={styles.container}>
-            <View style={styles.content}>
-                <Text style={styles.title}>Select Profile Type</Text>
-                <Text style={styles.description}>Choose how you want to use CabLite</Text>
+        <SafeAreaView className="flex-1 bg-white">
+            <View className="flex-1 p-6">
+                <Text className="text-3xl font-bold text-slate-800 mb-2">Select Profile Type</Text>
+                <Text className="text-base text-slate-500 mb-8">Choose how you want to use CabLite</Text>
 
-                <View style={styles.cardsContainer}>
+                <View className="gap-5">
                     {/* Passenger Card */}
                     <TouchableOpacity
-                        style={styles.card}
+                        className="bg-white p-6 rounded-[20px] border border-slate-100 shadow-sm"
+                        style={{ elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8 }}
                         onPress={() => handleSelectRole('passenger')}
                         activeOpacity={0.7}
                     >
-                        <View style={styles.cardHeader}>
-                            <Text style={styles.cardIcon}>🚕</Text>
-                            <Text style={styles.cardTitle}>Passenger</Text>
+                        <View className="flex-row items-center mb-3">
+                            <User size={32} color="#4F46E5" className="mr-3" />
+                            <Text className="text-2xl font-bold text-slate-800">Passenger</Text>
                         </View>
-                        <Text style={styles.cardDescription}>
+                        <Text className="text-base text-slate-500 leading-6 mb-5">
                             Request rides via SMS when internet is unavailable
                         </Text>
-                        <View style={styles.cardButton}>
-                            <Text style={styles.cardButtonText}>Continue as Passenger</Text>
+                        <View className="bg-primary py-4 rounded-xl">
+                            <Text className="text-white text-center text-base font-semibold">Continue as Passenger</Text>
                         </View>
                     </TouchableOpacity>
 
                     {/* Driver Card */}
                     <TouchableOpacity
-                        style={styles.card}
+                        className="bg-white p-6 rounded-[20px] border border-slate-100 shadow-sm"
+                        style={{ elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8 }}
                         onPress={() => handleSelectRole('driver')}
                         activeOpacity={0.7}
                     >
-                        <View style={styles.cardHeader}>
-                            <Text style={styles.cardIcon}>🚘</Text>
-                            <Text style={styles.cardTitle}>Driver</Text>
+                        <View className="flex-row items-center mb-3">
+                            <Car size={32} color="#4F46E5" className="mr-3" />
+                            <Text className="text-2xl font-bold text-slate-800">Driver</Text>
                         </View>
-                        <Text style={styles.cardDescription}>
+                        <Text className="text-base text-slate-500 leading-6 mb-5">
                             Accept nearby ride requests and share live location
                         </Text>
-                        <View style={styles.cardButton}>
-                            <Text style={styles.cardButtonText}>Continue as Driver</Text>
+                        <View className="bg-primary py-4 rounded-xl">
+                            <Text className="text-white text-center text-base font-semibold">Continue as Driver</Text>
                         </View>
                     </TouchableOpacity>
                 </View>
@@ -67,71 +70,3 @@ export default function RoleSelectionScreen() {
         </SafeAreaView>
     );
 }
-
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#fff',
-    },
-    content: {
-        flex: 1,
-        padding: 24,
-    },
-    title: {
-        fontSize: 32,
-        fontWeight: 'bold',
-        color: '#1e293b',
-        marginBottom: 8,
-    },
-    description: {
-        fontSize: 16,
-        color: '#64748b',
-        marginBottom: 32,
-    },
-    cardsContainer: {
-        gap: 20,
-    },
-    card: {
-        backgroundColor: '#f8fafc',
-        borderRadius: 16,
-        padding: 24,
-        borderWidth: 2,
-        borderColor: '#e2e8f0',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
-        elevation: 3,
-    },
-    cardHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 12,
-    },
-    cardIcon: {
-        fontSize: 32,
-        marginRight: 12,
-    },
-    cardTitle: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#1e293b',
-    },
-    cardDescription: {
-        fontSize: 16,
-        color: '#64748b',
-        lineHeight: 24,
-        marginBottom: 20,
-    },
-    cardButton: {
-        backgroundColor: '#007AFF',
-        paddingVertical: 14,
-        borderRadius: 10,
-    },
-    cardButtonText: {
-        color: '#fff',
-        textAlign: 'center',
-        fontSize: 16,
-        fontWeight: '600',
-    },
-});

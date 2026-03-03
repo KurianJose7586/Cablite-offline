@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Switch, Alert, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, Switch, Alert, ActivityIndicator, Modal, Vibration } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 import { useRideStore } from '../store/useRideStore';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Car, Settings, MapPin, RefreshCw, BellRing, Route } from 'lucide-react-native';
 
 export default function DriverHomeScreen() {
     const router = useRouter();
@@ -21,12 +22,18 @@ export default function DriverHomeScreen() {
     const [address, setAddress] = useState<string | null>(null);
     const [loadingLocation, setLoadingLocation] = useState(false);
 
-    // Redirect to active ride screen if driver has accepted a ride
     useEffect(() => {
         if (currentRideAsDriver) {
             router.replace('/driver-active-ride');
         }
     }, [currentRideAsDriver]);
+
+    // Vibration feedback for incoming requests
+    useEffect(() => {
+        if (incomingRideRequest && isDriverOnline) {
+            Vibration.vibrate([0, 500, 200, 500]);
+        }
+    }, [incomingRideRequest]);
 
     const fetchLocation = async () => {
         setLoadingLocation(true);
@@ -60,20 +67,10 @@ export default function DriverHomeScreen() {
         fetchLocation();
     }, []);
 
-    const handleToggleOnline = () => {
-        toggleDriverOnline();
-    };
+    const handleToggleOnline = () => toggleDriverOnline();
+    const handleAccept = () => acceptRide();
+    const handleDecline = () => declineRide();
 
-    const handleAccept = () => {
-        acceptRide();
-        // Navigation happens automatically via useEffect
-    };
-
-    const handleDecline = () => {
-        declineRide();
-    };
-
-    // DEBUG: Simulate incoming ride request
     const simulateRideRequest = () => {
         if (!location) {
             Alert.alert('Location not available', 'Please wait for location to be fetched.');
@@ -95,35 +92,36 @@ export default function DriverHomeScreen() {
     };
 
     return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView className="flex-1 bg-slate-50 p-5">
             {/* Header */}
-            <View style={styles.header}>
+            <View className="flex-row justify-between items-start mb-6 mt-2">
                 <View>
-                    <Text style={styles.title}>CabLite</Text>
-                    <View style={styles.badge}>
-                        <Text style={styles.badgeText}>🚘 Driver Mode</Text>
+                    <Text className="text-3xl font-bold text-slate-800 mb-2">CabLite</Text>
+                    <View className="bg-accent px-3 py-1.5 rounded-full self-start flex-row items-center">
+                        <Car size={14} color="#ffffff" className="mr-1.5" />
+                        <Text className="text-white text-xs font-semibold tracking-wide">DRIVER</Text>
                     </View>
                 </View>
-                <TouchableOpacity onPress={() => router.push('/settings')}>
-                    <Text style={styles.linkText}>Settings</Text>
+                <TouchableOpacity onPress={() => router.push('/settings')} className="p-2 border border-slate-200 rounded-full bg-white shadow-sm">
+                    <Settings size={22} color="#64748b" />
                 </TouchableOpacity>
             </View>
 
-            {/* Online/Offline Toggle */}
-            <View style={styles.toggleCard}>
-                <View style={styles.toggleHeader}>
-                    <Text style={styles.toggleLabel}>
+            {/* Online/Offline Toggle Card */}
+            <View className="bg-white p-6 rounded-[20px] mb-6 shadow-sm border border-slate-100" style={{ elevation: 2 }}>
+                <View className="flex-row justify-between items-center mb-2">
+                    <Text className="text-2xl font-bold text-slate-800">
                         {isDriverOnline ? 'ONLINE' : 'OFFLINE'}
                     </Text>
                     <Switch
                         value={isDriverOnline}
                         onValueChange={handleToggleOnline}
-                        trackColor={{ false: '#cbd5e1', true: '#22c55e' }}
+                        trackColor={{ false: '#cbd5e1', true: '#10B981' }}
                         thumbColor="#fff"
                         ios_backgroundColor="#cbd5e1"
                     />
                 </View>
-                <Text style={styles.toggleHint}>
+                <Text className="text-sm text-slate-500">
                     {isDriverOnline
                         ? 'You are online and can receive ride requests'
                         : 'Toggle to start receiving ride requests'}
@@ -131,254 +129,108 @@ export default function DriverHomeScreen() {
             </View>
 
             {/* Current Location */}
-            <View style={styles.card}>
-                <Text style={styles.cardTitle}>📍 Current Location</Text>
+            <View className="bg-white p-6 rounded-[20px] mb-6 shadow-sm border border-slate-100" style={{ elevation: 2 }}>
+                <View className="flex-row items-center mb-3">
+                    <MapPin size={22} color="#4F46E5" className="mr-2.5" />
+                    <Text className="text-lg font-semibold text-slate-800">Current Location</Text>
+                </View>
                 {loadingLocation ? (
-                    <ActivityIndicator size="small" color="#007AFF" />
+                    <ActivityIndicator size="small" color="#4F46E5" className="mt-2 text-left self-start" />
                 ) : (
-                    <Text style={styles.locationText}>
+                    <Text className="text-base text-slate-500 mt-1 leading-6">
                         {address || (location ? `${location.coords.latitude.toFixed(4)}, ${location.coords.longitude.toFixed(4)}` : 'Fetching location...')}
                     </Text>
                 )}
-                <TouchableOpacity onPress={fetchLocation} style={styles.refreshButton}>
-                    <Text style={styles.linkText}>Refresh Location</Text>
+                <TouchableOpacity onPress={fetchLocation} className="mt-6 flex-row items-center">
+                    <RefreshCw size={16} color="#4F46E5" className="mr-2" />
+                    <Text className="text-primary text-base font-semibold">Refresh Location</Text>
                 </TouchableOpacity>
             </View>
 
-            {/* Status / Incoming Request */}
+            {/* Status Placeholder / Waiting */}
             {!isDriverOnline ? (
-                <View style={styles.offlineCard}>
-                    <Text style={styles.offlineText}>
+                <View className="bg-slate-100 p-8 rounded-[20px] items-center border border-slate-200 border-dashed">
+                    <Text className="text-slate-500 text-base text-center">
                         You are offline. Toggle above to start receiving ride requests.
                     </Text>
                 </View>
-            ) : incomingRideRequest ? (
-                <View style={styles.requestCard}>
-                    <Text style={styles.requestTitle}>🚕 Incoming Ride Request</Text>
-                    <View style={styles.requestDetails}>
-                        <View style={styles.requestRow}>
-                            <Text style={styles.requestLabel}>Pickup:</Text>
-                            <Text style={styles.requestValue}>{incomingRideRequest.pickupLocation}</Text>
-                        </View>
-                        <View style={styles.requestRow}>
-                            <Text style={styles.requestLabel}>Distance from you:</Text>
-                            <Text style={styles.requestValue}>{incomingRideRequest.distanceFromDriver.toFixed(1)} km</Text>
-                        </View>
-                        <View style={styles.requestRow}>
-                            <Text style={styles.requestLabel}>Estimated ride:</Text>
-                            <Text style={styles.requestValue}>{incomingRideRequest.estimatedRideDistance.toFixed(1)} km</Text>
-                        </View>
-                        <View style={styles.requestRow}>
-                            <Text style={styles.requestLabel}>Ride ID:</Text>
-                            <Text style={styles.requestValue}>{incomingRideRequest.rideId}</Text>
-                        </View>
-                    </View>
-                    <View style={styles.requestActions}>
-                        <TouchableOpacity
-                            style={styles.acceptButton}
-                            onPress={handleAccept}
-                        >
-                            <Text style={styles.acceptButtonText}>ACCEPT</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={styles.declineButton}
-                            onPress={handleDecline}
-                        >
-                            <Text style={styles.declineButtonText}>DECLINE</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            ) : (
-                <View style={styles.waitingCard}>
-                    <ActivityIndicator size="large" color="#22c55e" />
-                    <Text style={styles.waitingText}>Waiting for Ride Requests...</Text>
+            ) : !incomingRideRequest && (
+                <View className="bg-emerald-50 p-10 rounded-[20px] items-center border border-emerald-100 shadow-sm">
+                    <ActivityIndicator size="large" color="#10B981" />
+                    <Text className="mt-5 text-accent text-lg font-semibold">Waiting for Ride Requests...</Text>
                 </View>
             )}
 
+            {/* Dramatic Incoming Request Bottom Sheet (Simulated with Modal) */}
+            <Modal
+                visible={!!incomingRideRequest && isDriverOnline}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={handleDecline}
+            >
+                <View className="flex-1 justify-end bg-slate-900/40">
+                    <View className="bg-white rounded-t-[32px] p-6 shadow-xl pt-8 pb-10" style={{ elevation: 24 }}>
+                        <View className="flex-row items-center justify-between mb-6">
+                            <Text className="text-3xl font-extrabold text-slate-800">New Request</Text>
+                            <BellRing size={32} color="#F59E0B" />
+                        </View>
+
+                        {incomingRideRequest && (
+                            <View className="mb-8 bg-slate-50 p-5 rounded-2xl border border-slate-100">
+                                <View className="flex-row items-center mb-4">
+                                    <View className="w-10 h-10 rounded-full bg-indigo-100 items-center justify-center mr-4">
+                                        <MapPin size={20} color="#4F46E5" />
+                                    </View>
+                                    <View className="flex-1">
+                                        <Text className="text-sm text-slate-500 font-semibold uppercase tracking-wider">Pickup</Text>
+                                        <Text className="text-base font-bold text-slate-800">{incomingRideRequest.pickupLocation}</Text>
+                                    </View>
+                                </View>
+
+                                <View className="h-[1px] bg-slate-200 mb-4" />
+
+                                <View className="flex-row justify-between">
+                                    <View className="flex-row items-center">
+                                        <Route size={18} color="#64748b" className="mr-2" />
+                                        <Text className="text-sm font-semibold text-slate-600">
+                                            {incomingRideRequest.distanceFromDriver.toFixed(1)} km away
+                                        </Text>
+                                    </View>
+                                    <Text className="text-sm font-medium text-slate-400">ID: {incomingRideRequest.rideId}</Text>
+                                </View>
+                            </View>
+                        )}
+
+                        <View className="flex-row gap-4">
+                            <TouchableOpacity
+                                className="flex-1 bg-slate-200 py-5 rounded-xl border border-slate-300"
+                                onPress={handleDecline}
+                            >
+                                <Text className="text-slate-600 text-center text-lg font-bold">DECLINE</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                className="flex-1 bg-accent py-5 rounded-xl shadow-sm"
+                                style={{ elevation: 4, shadowColor: '#10B981', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8 }}
+                                onPress={handleAccept}
+                            >
+                                <Text className="text-white text-center text-lg font-bold">ACCEPT RIDE</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
             {/* DEBUG Button */}
             {isDriverOnline && !incomingRideRequest && (
-                <TouchableOpacity
-                    onPress={simulateRideRequest}
-                    style={styles.debugButton}
-                >
-                    <Text style={styles.debugButtonText}>DEBUG: Simulate Ride Request</Text>
-                </TouchableOpacity>
+                <View className="flex-1 justify-end pb-8 mt-5">
+                    <TouchableOpacity
+                        onPress={simulateRideRequest}
+                        className="bg-slate-800 p-4 rounded-xl"
+                    >
+                        <Text className="text-white text-center font-bold text-base">DEBUG: Simulate Request</Text>
+                    </TouchableOpacity>
+                </View>
             )}
         </SafeAreaView>
     );
 }
-
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#fff',
-        padding: 16,
-    },
-    header: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        marginBottom: 24,
-    },
-    title: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#1e293b',
-        marginBottom: 8,
-    },
-    badge: {
-        backgroundColor: '#22c55e',
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 16,
-        alignSelf: 'flex-start',
-    },
-    badgeText: {
-        color: '#fff',
-        fontSize: 12,
-        fontWeight: '600',
-    },
-    linkText: {
-        color: '#007AFF',
-        fontSize: 16,
-    },
-    toggleCard: {
-        backgroundColor: '#f8fafc',
-        padding: 20,
-        borderRadius: 12,
-        marginBottom: 20,
-        borderWidth: 2,
-        borderColor: '#e2e8f0',
-    },
-    toggleHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 8,
-    },
-    toggleLabel: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#1e293b',
-    },
-    toggleHint: {
-        fontSize: 14,
-        color: '#64748b',
-    },
-    card: {
-        backgroundColor: '#f8fafc',
-        padding: 20,
-        borderRadius: 12,
-        marginBottom: 20,
-    },
-    cardTitle: {
-        fontSize: 18,
-        fontWeight: '600',
-        color: '#1e293b',
-        marginBottom: 8,
-    },
-    locationText: {
-        color: '#64748b',
-        fontSize: 16,
-        marginTop: 8,
-    },
-    refreshButton: {
-        marginTop: 12,
-    },
-    offlineCard: {
-        backgroundColor: '#f1f5f9',
-        padding: 32,
-        borderRadius: 12,
-        alignItems: 'center',
-    },
-    offlineText: {
-        color: '#64748b',
-        fontSize: 16,
-        textAlign: 'center',
-    },
-    waitingCard: {
-        backgroundColor: '#f0fdf4',
-        padding: 48,
-        borderRadius: 12,
-        alignItems: 'center',
-        borderWidth: 2,
-        borderColor: '#bbf7d0',
-    },
-    waitingText: {
-        marginTop: 16,
-        color: '#22c55e',
-        fontSize: 18,
-        fontWeight: '600',
-    },
-    requestCard: {
-        backgroundColor: '#fef3c7',
-        padding: 20,
-        borderRadius: 12,
-        borderWidth: 2,
-        borderColor: '#fbbf24',
-    },
-    requestTitle: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        color: '#1e293b',
-        marginBottom: 16,
-    },
-    requestDetails: {
-        marginBottom: 20,
-    },
-    requestRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginBottom: 8,
-    },
-    requestLabel: {
-        fontSize: 14,
-        color: '#64748b',
-        fontWeight: '600',
-    },
-    requestValue: {
-        fontSize: 14,
-        color: '#1e293b',
-        fontWeight: '600',
-    },
-    requestActions: {
-        flexDirection: 'row',
-        gap: 12,
-    },
-    acceptButton: {
-        flex: 1,
-        backgroundColor: '#22c55e',
-        paddingVertical: 16,
-        borderRadius: 10,
-    },
-    acceptButtonText: {
-        color: '#fff',
-        textAlign: 'center',
-        fontSize: 18,
-        fontWeight: 'bold',
-    },
-    declineButton: {
-        flex: 1,
-        backgroundColor: '#94a3b8',
-        paddingVertical: 16,
-        borderRadius: 10,
-    },
-    declineButtonText: {
-        color: '#fff',
-        textAlign: 'center',
-        fontSize: 18,
-        fontWeight: 'bold',
-    },
-    debugButton: {
-        backgroundColor: '#1e293b',
-        padding: 16,
-        borderRadius: 12,
-        marginTop: 20,
-    },
-    debugButtonText: {
-        color: '#fff',
-        textAlign: 'center',
-        fontWeight: 'bold',
-        fontSize: 16,
-    },
-});
