@@ -72,6 +72,13 @@ export default function DriverActiveRideScreen() {
         ]);
     };
 
+    const handleCancelTrip = () => {
+        Alert.alert('Cancel Ride', 'Are you sure you want to cancel this ride?', [
+            { text: 'No', style: 'cancel' },
+            { text: 'Yes, Cancel', onPress: () => { completeRideAsDriver(); router.replace('/driver-home'); } },
+        ]);
+    };
+
     const getStatusStyle = () => {
         switch (status) {
             case 'ACCEPTED': return { bg: 'bg-indigo-100', text: 'text-indigo-700' };
@@ -135,7 +142,7 @@ export default function DriverActiveRideScreen() {
                 <View className="flex-row items-start justify-between">
                     <View className="flex-1">
                         <Text className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Location</Text>
-                        <Text className="text-lg font-bold text-slate-800 mb-1">123 Main St, Downtown</Text>
+                        <Text className="text-lg font-bold text-slate-800 mb-1">C113 Lajpat Nagar, New Delhi</Text>
                         <Text className="text-sm text-slate-500 font-semibold">Distance: 2.3 km</Text>
                     </View>
                     <MapPin size={24} color="#4F46E5" className="mt-2" />
@@ -165,6 +172,10 @@ export default function DriverActiveRideScreen() {
                         <Text className="text-white text-center text-lg font-bold">Complete Trip</Text>
                     </TouchableOpacity>
                 )}
+
+                <TouchableOpacity onPress={handleCancelTrip} className="py-4 mt-2">
+                    <Text className="text-danger text-center text-base font-bold">Cancel Ride</Text>
+                </TouchableOpacity>
             </View>
         </SafeAreaView>
     );

@@ -79,7 +79,7 @@ export default function DriverHomeScreen() {
 
         const mockRequest = {
             rideId: Math.floor(100000 + Math.random() * 900000).toString(),
-            pickupLocation: '123 Main St, Downtown',
+            pickupLocation: 'Lajpat Nagar, New Delhi',
             pickupCoords: {
                 latitude: location.coords.latitude + 0.01,
                 longitude: location.coords.longitude + 0.01,

@@ -11,7 +11,7 @@ export default function WelcomeScreen() {
             <View className="flex-1 p-6 justify-between">
                 <View className="flex-1 justify-center items-center">
                     <Text className="text-5xl font-bold text-primary mb-4">CabLite</Text>
-                    <Text className="text-lg text-slate-500 text-center">Book a ride — even without internet.</Text>
+                    <Text className="text-lg text-slate-500 text-center">Because bad network shouldn’t ruin your day.</Text>
                 </View>
 
                 <View className="pb-8">

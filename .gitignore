@@ -39,3 +39,12 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# development artifacts
+logs/
+*.log
+.cache/
+build/
+
+# development tools
+debug-logs/
