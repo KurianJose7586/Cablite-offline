@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Switch, Alert, ActivityIndicator, Modal, Vibration } from 'react-native';
+import { View, Text, TouchableOpacity, Switch, Alert, ActivityIndicator, Modal, Vibration, StatusBar } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 import { useRideStore } from '../store/useRideStore';
@@ -19,7 +19,6 @@ export default function DriverHomeScreen() {
     } = useRideStore();
 
     const [location, setLocation] = useState<Location.LocationObject | null>(null);
-    const [address, setAddress] = useState<string | null>(null);
     const [loadingLocation, setLoadingLocation] = useState(false);
 
     useEffect(() => {
@@ -39,37 +38,19 @@ export default function DriverHomeScreen() {
         setLoadingLocation(true);
         let { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') {
-            Alert.alert('Permission to access location was denied');
+            Alert.alert('Location Denied', 'Permission to access location was denied');
             setLoadingLocation(false);
             return;
         }
 
-        let location = await Location.getCurrentPositionAsync({});
-        setLocation(location);
-
-        try {
-            let reverseGeocoded = await Location.reverseGeocodeAsync({
-                latitude: location.coords.latitude,
-                longitude: location.coords.longitude,
-            });
-
-            if (reverseGeocoded.length > 0) {
-                const addr = reverseGeocoded[0];
-                setAddress(`${addr.name || ''} ${addr.street || ''}, ${addr.city}`);
-            }
-        } catch (e) {
-            console.log('Error reverse geocoding', e);
-        }
+        let loc = await Location.getCurrentPositionAsync({});
+        setLocation(loc);
         setLoadingLocation(false);
     };
 
     useEffect(() => {
         fetchLocation();
     }, []);
-
-    const handleToggleOnline = () => toggleDriverOnline();
-    const handleAccept = () => acceptRide();
-    const handleDecline = () => declineRide();
 
     const simulateRideRequest = () => {
         if (!location) {
@@ -78,13 +59,13 @@ export default function DriverHomeScreen() {
         }
 
         const mockRequest = {
-            rideId: Math.floor(100000 + Math.random() * 900000).toString(),
-            pickupLocation: 'Lajpat Nagar, New Delhi',
+            rideId: Math.random().toString(36).substring(7).toUpperCase(),
+            pickupLocation: 'Central Station Terminal',
             pickupCoords: {
                 latitude: location.coords.latitude + 0.01,
                 longitude: location.coords.longitude + 0.01,
             },
-            distanceFromDriver: 2.3,
+            distanceFromDriver: 1.2,
             estimatedRideDistance: 5.7,
         };
 
@@ -92,145 +73,121 @@ export default function DriverHomeScreen() {
     };
 
     return (
-        <SafeAreaView className="flex-1 bg-slate-50 p-5">
+        <SafeAreaView className="flex-1 bg-neutral-950">
+            <StatusBar barStyle="light-content" />
+            
             {/* Header */}
-            <View className="flex-row justify-between items-start mb-6 mt-2">
-                <View>
-                    <Text className="text-3xl font-bold text-slate-800 mb-2">CabLite</Text>
-                    <View className="bg-accent px-3 py-1.5 rounded-full self-start flex-row items-center">
-                        <Car size={14} color="#ffffff" className="mr-1.5" />
-                        <Text className="text-white text-xs font-semibold tracking-wide">DRIVER</Text>
+            <View className="px-6 py-4 flex-row justify-between items-center z-10 bg-neutral-900 border-b border-neutral-800">
+                <View className="flex-row items-center">
+                    <Text className="text-white text-xl font-bold tracking-widest uppercase mr-3">CabLite</Text>
+                    <View className="bg-neutral-800 px-2 py-1 rounded">
+                        <Text className="text-neutral-400 text-[10px] font-bold tracking-wider">DRIVER OP</Text>
                     </View>
                 </View>
-                <TouchableOpacity onPress={() => router.push('/settings')} className="p-2 border border-slate-200 rounded-full bg-white shadow-sm">
-                    <Settings size={22} color="#64748b" />
+                <TouchableOpacity onPress={() => router.replace('/welcome')} className="p-2">
+                    <Text className="text-neutral-500 text-xs font-bold uppercase tracking-wider">Exit</Text>
                 </TouchableOpacity>
             </View>
 
-            {/* Online/Offline Toggle Card */}
-            <View className="bg-white p-6 rounded-[20px] mb-6 shadow-sm border border-slate-100" style={{ elevation: 2 }}>
-                <View className="flex-row justify-between items-center mb-2">
-                    <Text className="text-2xl font-bold text-slate-800">
-                        {isDriverOnline ? 'ONLINE' : 'OFFLINE'}
-                    </Text>
-                    <Switch
-                        value={isDriverOnline}
-                        onValueChange={handleToggleOnline}
-                        trackColor={{ false: '#cbd5e1', true: '#10B981' }}
-                        thumbColor="#fff"
-                        ios_backgroundColor="#cbd5e1"
-                    />
+            {/* Simulated Map Area (Background) */}
+            <View className="absolute top-0 left-0 right-0 bottom-0 pt-20 justify-center items-center opacity-20">
+                <View className="w-full h-full border border-neutral-800 border-dashed m-4 rounded flex items-center justify-center">
+                    <Text className="text-neutral-600 font-mono text-xs uppercase tracking-widest">[ Map Engine Active ]</Text>
+                    {location && (
+                        <Text className="text-neutral-500 font-mono text-xs mt-2">
+                            LAT: {location.coords.latitude.toFixed(4)} | LNG: {location.coords.longitude.toFixed(4)}
+                        </Text>
+                    )}
                 </View>
-                <Text className="text-sm text-slate-500">
-                    {isDriverOnline
-                        ? 'You are online and can receive ride requests'
-                        : 'Toggle to start receiving ride requests'}
-                </Text>
             </View>
 
-            {/* Current Location */}
-            <View className="bg-white p-6 rounded-[20px] mb-6 shadow-sm border border-slate-100" style={{ elevation: 2 }}>
-                <View className="flex-row items-center mb-3">
-                    <MapPin size={22} color="#4F46E5" className="mr-2.5" />
-                    <Text className="text-lg font-semibold text-slate-800">Current Location</Text>
-                </View>
-                {loadingLocation ? (
-                    <ActivityIndicator size="small" color="#4F46E5" className="mt-2 text-left self-start" />
-                ) : (
-                    <Text className="text-base text-slate-500 mt-1 leading-6">
-                        {address || (location ? `${location.coords.latitude.toFixed(4)}, ${location.coords.longitude.toFixed(4)}` : 'Fetching location...')}
+            {/* Main Content Area */}
+            <View className="flex-1 px-6 pt-6 z-10 justify-end pb-8">
+                
+                {/* Status Toggle Card */}
+                <View className="bg-neutral-900 border border-neutral-800 p-6 rounded-none mb-6">
+                    <View className="flex-row justify-between items-center mb-2">
+                        <View className="flex-row items-center">
+                            <View className={`w-3 h-3 rounded-full mr-3 ${isDriverOnline ? 'bg-emerald-500' : 'bg-neutral-600'}`} />
+                            <Text className={`text-2xl font-black uppercase tracking-wider ${isDriverOnline ? 'text-emerald-500' : 'text-neutral-500'}`}>
+                                {isDriverOnline ? 'ONLINE' : 'OFFLINE'}
+                            </Text>
+                        </View>
+                        <Switch
+                            value={isDriverOnline}
+                            onValueChange={toggleDriverOnline}
+                            trackColor={{ false: '#262626', true: '#047857' }}
+                            thumbColor="#fff"
+                        />
+                    </View>
+                    <Text className="text-neutral-500 text-sm font-medium">
+                        {isDriverOnline ? 'Awaiting dispatch broadcasts.' : 'System standby.'}
                     </Text>
+                </View>
+
+                {/* Status Indicator */}
+                {isDriverOnline && !incomingRideRequest && (
+                    <View className="bg-neutral-900 border border-neutral-800 p-6 rounded-none flex-row items-center justify-center">
+                        <ActivityIndicator size="small" color="#10B981" />
+                        <Text className="ml-3 text-neutral-400 text-sm font-bold uppercase tracking-wider">Syncing Location...</Text>
+                    </View>
                 )}
-                <TouchableOpacity onPress={fetchLocation} className="mt-6 flex-row items-center">
-                    <RefreshCw size={16} color="#4F46E5" className="mr-2" />
-                    <Text className="text-primary text-base font-semibold">Refresh Location</Text>
-                </TouchableOpacity>
+
+                {/* DEBUG Button */}
+                {isDriverOnline && !incomingRideRequest && (
+                    <TouchableOpacity
+                        onPress={simulateRideRequest}
+                        className="mt-6 border border-neutral-800 p-4"
+                    >
+                        <Text className="text-neutral-500 text-center font-mono text-xs uppercase tracking-widest">Trigger Simulation Request</Text>
+                    </TouchableOpacity>
+                )}
             </View>
 
-            {/* Status Placeholder / Waiting */}
-            {!isDriverOnline ? (
-                <View className="bg-slate-100 p-8 rounded-[20px] items-center border border-slate-200 border-dashed">
-                    <Text className="text-slate-500 text-base text-center">
-                        You are offline. Toggle above to start receiving ride requests.
-                    </Text>
-                </View>
-            ) : !incomingRideRequest && (
-                <View className="bg-emerald-50 p-10 rounded-[20px] items-center border border-emerald-100 shadow-sm">
-                    <ActivityIndicator size="large" color="#10B981" />
-                    <Text className="mt-5 text-accent text-lg font-semibold">Waiting for Ride Requests...</Text>
-                </View>
-            )}
-
-            {/* Dramatic Incoming Request Bottom Sheet (Simulated with Modal) */}
+            {/* Incoming Request Modal */}
             <Modal
                 visible={!!incomingRideRequest && isDriverOnline}
                 animationType="slide"
                 transparent={true}
-                onRequestClose={handleDecline}
             >
-                <View className="flex-1 justify-end bg-slate-900/40">
-                    <View className="bg-white rounded-t-[32px] p-6 shadow-xl pt-8 pb-10" style={{ elevation: 24 }}>
-                        <View className="flex-row items-center justify-between mb-6">
-                            <Text className="text-3xl font-extrabold text-slate-800">New Request</Text>
-                            <BellRing size={32} color="#F59E0B" />
+                <View className="flex-1 justify-end bg-black/80">
+                    <View className="bg-neutral-900 border-t border-neutral-800 p-6 pt-8 pb-10">
+                        <View className="flex-row items-center justify-between mb-8">
+                            <Text className="text-emerald-500 text-sm font-black tracking-widest uppercase">New Dispatch</Text>
+                            <Text className="text-neutral-500 font-mono text-xs">ID: {incomingRideRequest?.rideId}</Text>
                         </View>
 
                         {incomingRideRequest && (
-                            <View className="mb-8 bg-slate-50 p-5 rounded-2xl border border-slate-100">
-                                <View className="flex-row items-center mb-4">
-                                    <View className="w-10 h-10 rounded-full bg-indigo-100 items-center justify-center mr-4">
-                                        <MapPin size={20} color="#4F46E5" />
+                            <View className="mb-10">
+                                <Text className="text-neutral-400 text-xs font-bold uppercase tracking-widest mb-2">Pickup Location</Text>
+                                <Text className="text-white text-3xl font-black leading-tight mb-4">{incomingRideRequest.pickupLocation}</Text>
+                                
+                                <View className="flex-row items-center">
+                                    <View className="bg-neutral-800 px-3 py-1 mr-3">
+                                        <Text className="text-neutral-300 font-mono text-sm">{incomingRideRequest.distanceFromDriver.toFixed(1)} KM</Text>
                                     </View>
-                                    <View className="flex-1">
-                                        <Text className="text-sm text-slate-500 font-semibold uppercase tracking-wider">Pickup</Text>
-                                        <Text className="text-base font-bold text-slate-800">{incomingRideRequest.pickupLocation}</Text>
-                                    </View>
-                                </View>
-
-                                <View className="h-[1px] bg-slate-200 mb-4" />
-
-                                <View className="flex-row justify-between">
-                                    <View className="flex-row items-center">
-                                        <Route size={18} color="#64748b" className="mr-2" />
-                                        <Text className="text-sm font-semibold text-slate-600">
-                                            {incomingRideRequest.distanceFromDriver.toFixed(1)} km away
-                                        </Text>
-                                    </View>
-                                    <Text className="text-sm font-medium text-slate-400">ID: {incomingRideRequest.rideId}</Text>
+                                    <Text className="text-neutral-500 font-mono text-sm">EST DIST: {incomingRideRequest.estimatedRideDistance} KM</Text>
                                 </View>
                             </View>
                         )}
 
                         <View className="flex-row gap-4">
                             <TouchableOpacity
-                                className="flex-1 bg-slate-200 py-5 rounded-xl border border-slate-300"
-                                onPress={handleDecline}
+                                className="flex-1 bg-neutral-800 py-6 border border-neutral-700"
+                                onPress={declineRide}
                             >
-                                <Text className="text-slate-600 text-center text-lg font-bold">DECLINE</Text>
+                                <Text className="text-neutral-400 text-center text-lg font-black tracking-widest uppercase">Decline</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
-                                className="flex-1 bg-accent py-5 rounded-xl shadow-sm"
-                                style={{ elevation: 4, shadowColor: '#10B981', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8 }}
-                                onPress={handleAccept}
+                                className="flex-1 bg-emerald-600 py-6"
+                                onPress={acceptRide}
                             >
-                                <Text className="text-white text-center text-lg font-bold">ACCEPT RIDE</Text>
+                                <Text className="text-white text-center text-lg font-black tracking-widest uppercase">Accept</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
                 </View>
             </Modal>
-
-            {/* DEBUG Button */}
-            {isDriverOnline && !incomingRideRequest && (
-                <View className="flex-1 justify-end pb-8 mt-5">
-                    <TouchableOpacity
-                        onPress={simulateRideRequest}
-                        className="bg-slate-800 p-4 rounded-xl"
-                    >
-                        <Text className="text-white text-center font-bold text-base">DEBUG: Simulate Request</Text>
-                    </TouchableOpacity>
-                </View>
-            )}
         </SafeAreaView>
     );
 }

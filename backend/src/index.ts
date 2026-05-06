@@ -1,16 +1,22 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import http from 'http';
 import { logger } from './utils/logger';
 import webhookRoutes from './routes/webhook';
 import driverRoutes from './routes/driver';
+import { socketService } from './services/socketService';
 import './services/broadcastService'; // Initialize event listeners
 
 // Load environment variables
 dotenv.config();
 
 const app = express();
+const server = http.createServer(app);
 const PORT = process.env.PORT || 3000;
+
+// Initialize WebSockets
+socketService.init(server);
 
 // Middleware
 app.use(cors());
@@ -71,7 +77,7 @@ app.use((err: any, req: express.Request, res: express.Response, _next: express.N
 });
 
 // Start server
-app.listen(PORT, () => {
+server.listen(PORT, () => {
     logger.info(`🚀 CabLite Backend running on port ${PORT}`);
     logger.info(`📍 Environment: ${process.env.NODE_ENV}`);
     logger.info(`🗄️  Database: ${process.env.DATABASE_URL ? 'Connected' : 'Not configured'}`);
@@ -79,6 +85,10 @@ app.listen(PORT, () => {
     // Start background workers
     const { startExpiryWorker } = require('./jobs/expiryWorker');
     startExpiryWorker();
+
+    // Start simulation service
+    const { simulationService } = require('./services/simulationService');
+    simulationService.init();
 });
 
 // Graceful shutdown handlers

@@ -1,5 +1,6 @@
 import twilio from 'twilio';
 import { logger } from '../utils/logger';
+import { socketService } from './socketService';
 
 // Initialize Twilio client only if valid credentials are provided
 const hasValidCredentials =
@@ -16,8 +17,15 @@ export class SMSService {
      * Send SMS message
      */
     async send(to: string, message: string): Promise<void> {
+        // Try to send simulated SMS via WebSocket first
+        const simulated = socketService.sendSimulatedSMS(to, message);
+        if (simulated) {
+            logger.info('Simulated SMS sent instead of Twilio', { to, message });
+            return;
+        }
+
         if (!twilioClient) {
-            logger.warn('Twilio not configured, skipping SMS send', { to, message });
+            logger.warn('Twilio not configured and no simulator connected, skipping SMS send', { to, message });
             return;
         }
 
@@ -28,9 +36,9 @@ export class SMSService {
                 to
             });
 
-            logger.info('SMS sent', { to, message });
+            logger.info('SMS sent via Twilio', { to, message });
         } catch (error: any) {
-            logger.error('Failed to send SMS', {
+            logger.error('Failed to send SMS via Twilio', {
                 to,
                 error: error.message
             });

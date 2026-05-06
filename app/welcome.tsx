@@ -1,26 +1,48 @@
 import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, StatusBar } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRideStore } from '../store/useRideStore';
 
 export default function WelcomeScreen() {
     const router = useRouter();
+    const { setUserRole, setOnboarding } = useRideStore();
+
+    const handleSelectRole = (role: 'passenger' | 'driver') => {
+        setUserRole(role);
+        setOnboarding(true);
+
+        if (role === 'passenger') {
+            router.replace('/simulator'); // We will create this screen
+        } else {
+            router.replace('/driver-home');
+        }
+    };
 
     return (
-        <SafeAreaView className="flex-1 bg-white">
-            <View className="flex-1 p-6 justify-between">
-                <View className="flex-1 justify-center items-center">
-                    <Text className="text-5xl font-bold text-primary mb-4">CabLite</Text>
-                    <Text className="text-lg text-slate-500 text-center">Because bad network shouldn’t ruin your day.</Text>
+        <SafeAreaView className="flex-1 bg-neutral-900">
+            <StatusBar barStyle="light-content" />
+            <View className="flex-1 px-8 justify-center">
+                <View className="mb-16">
+                    <Text className="text-white text-5xl font-black tracking-tight mb-2">CAB<Text className="text-emerald-500">LITE</Text></Text>
+                    <Text className="text-neutral-400 text-lg font-medium tracking-wide uppercase">System Simulation</Text>
                 </View>
 
-                <View className="pb-8">
+                <View className="space-y-6 gap-4">
                     <TouchableOpacity
-                        onPress={() => router.push('/role-selection')}
-                        className="bg-primary py-5 rounded-2xl shadow-sm"
-                        style={{ elevation: 6, shadowColor: '#4F46E5', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 12 }}
+                        onPress={() => handleSelectRole('driver')}
+                        className="bg-neutral-800 border border-neutral-700 p-6 rounded-none active:bg-neutral-700"
                     >
-                        <Text className="text-white text-center text-xl font-bold">Get Started</Text>
+                        <Text className="text-white text-xl font-bold tracking-wide uppercase mb-2">Enter Driver Mode</Text>
+                        <Text className="text-neutral-400 text-sm">Access the real-time map interface and accept dispatch broadcasts.</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        onPress={() => handleSelectRole('passenger')}
+                        className="bg-emerald-600 p-6 rounded-none active:bg-emerald-700"
+                    >
+                        <Text className="text-white text-xl font-bold tracking-wide uppercase mb-2">Launch Passenger Simulator</Text>
+                        <Text className="text-emerald-100 text-sm">Simulate offline SMS booking flow using the virtual terminal.</Text>
                     </TouchableOpacity>
                 </View>
             </View>

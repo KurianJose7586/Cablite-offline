@@ -1,0 +1,22 @@
+# Ignore backend folder to prevent EAS from confusing it as a monorepo workspace
+backend/
+
+# Standard ignores (similar to .gitignore)
+node_modules/
+.expo/
+dist/
+web-build/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+.DS_Store
+*.pem
+.env*.local
+/ios
+/android
+logs/
+*.log
+.cache/
+build/
