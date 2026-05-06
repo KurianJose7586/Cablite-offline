@@ -89,10 +89,21 @@ export default function DriverHomeScreen() {
                 </TouchableOpacity>
             </View>
 
-            {/* Simulated Map Area (Background) */}
-            <View className="absolute top-0 left-0 right-0 bottom-0 pt-20 justify-center items-center opacity-20">
-                <View className="w-full h-full border border-neutral-800 border-dashed m-4 rounded flex items-center justify-center">
-                    <Text className="text-neutral-600 font-mono text-xs uppercase tracking-widest">[ Map Engine Active ]</Text>
+            {/* Realistic Dashboard Area (Background) */}
+            <View className="absolute top-0 left-0 right-0 bottom-0 pt-24 px-6 opacity-30">
+                <View className="flex-row justify-between mb-4">
+                    <View className="bg-neutral-800/50 p-4 rounded flex-1 mr-2 border border-neutral-800">
+                        <Text className="text-neutral-500 text-[10px] font-bold uppercase tracking-widest mb-1">Earnings Today</Text>
+                        <Text className="text-white text-2xl font-black font-mono">$142.50</Text>
+                    </View>
+                    <View className="bg-neutral-800/50 p-4 rounded flex-1 ml-2 border border-neutral-800">
+                        <Text className="text-neutral-500 text-[10px] font-bold uppercase tracking-widest mb-1">Acceptance Rate</Text>
+                        <Text className="text-white text-2xl font-black font-mono text-emerald-500">98%</Text>
+                    </View>
+                </View>
+                
+                <View className="w-full border border-neutral-800/50 p-4 rounded flex items-center justify-center mt-2">
+                    <Text className="text-neutral-600 font-mono text-[10px] uppercase tracking-widest">[ ROUTING ENGINE ACTIVE ]</Text>
                     {location && (
                         <Text className="text-neutral-500 font-mono text-xs mt-2">
                             LAT: {location.coords.latitude.toFixed(4)} | LNG: {location.coords.longitude.toFixed(4)}
@@ -133,15 +144,6 @@ export default function DriverHomeScreen() {
                     </View>
                 )}
 
-                {/* DEBUG Button */}
-                {isDriverOnline && !incomingRideRequest && (
-                    <TouchableOpacity
-                        onPress={simulateRideRequest}
-                        className="mt-6 border border-neutral-800 p-4"
-                    >
-                        <Text className="text-neutral-500 text-center font-mono text-xs uppercase tracking-widest">Trigger Simulation Request</Text>
-                    </TouchableOpacity>
-                )}
             </View>
 
             {/* Incoming Request Modal */}

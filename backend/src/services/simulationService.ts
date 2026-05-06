@@ -1,7 +1,7 @@
 import { prisma } from '../db/prisma';
 import { logger } from '../utils/logger';
 import { eventBus } from './eventBus';
-import { rideService } from './rideService';
+
 
 // Default city center (e.g., Bangalore)
 const CENTER_LAT = 12.9716;
@@ -9,6 +9,7 @@ const CENTER_LNG = 77.5946;
 
 class SimulationService {
     private ghostDriverIds: string[] = [];
+    // @ts-ignore
     private movementInterval: NodeJS.Timeout | null = null;
     private initialized = false;
 
@@ -163,7 +164,7 @@ class SimulationService {
                 } catch (error) {
                     logger.warn('Ghost driver failed to accept ride', error);
                 }
-            }, 3000);
+            }, 60000);
         });
     }
 }

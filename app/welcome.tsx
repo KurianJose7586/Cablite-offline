@@ -25,7 +25,7 @@ export default function WelcomeScreen() {
             <View className="flex-1 px-8 justify-center">
                 <View className="mb-16">
                     <Text className="text-white text-5xl font-black tracking-tight mb-2">CAB<Text className="text-emerald-500">LITE</Text></Text>
-                    <Text className="text-neutral-400 text-lg font-medium tracking-wide uppercase">System Simulation</Text>
+                    <Text className="text-neutral-400 text-lg font-medium tracking-wide uppercase">Dispatch & Routing</Text>
                 </View>
 
                 <View className="space-y-6 gap-4">
@@ -33,16 +33,16 @@ export default function WelcomeScreen() {
                         onPress={() => handleSelectRole('driver')}
                         className="bg-neutral-800 border border-neutral-700 p-6 rounded-none active:bg-neutral-700"
                     >
-                        <Text className="text-white text-xl font-bold tracking-wide uppercase mb-2">Enter Driver Mode</Text>
-                        <Text className="text-neutral-400 text-sm">Access the real-time map interface and accept dispatch broadcasts.</Text>
+                        <Text className="text-white text-xl font-bold tracking-wide uppercase mb-2">Driver Dashboard</Text>
+                        <Text className="text-neutral-400 text-sm">Access live routing, receive dispatches, and manage your shifts.</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
                         onPress={() => handleSelectRole('passenger')}
                         className="bg-emerald-600 p-6 rounded-none active:bg-emerald-700"
                     >
-                        <Text className="text-white text-xl font-bold tracking-wide uppercase mb-2">Launch Passenger Simulator</Text>
-                        <Text className="text-emerald-100 text-sm">Simulate offline SMS booking flow using the virtual terminal.</Text>
+                        <Text className="text-white text-xl font-bold tracking-wide uppercase mb-2">Enter Passenger App</Text>
+                        <Text className="text-emerald-100 text-sm">Book rides offline via our proprietary SMS gateway.</Text>
                     </TouchableOpacity>
                 </View>
             </View>

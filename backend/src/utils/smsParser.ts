@@ -66,12 +66,16 @@ export function parseSMS(body: string): ParsedSMS {
             };
 
         case 'UPDATE':
-            if (parts.length < 2) {
-                throw new Error('Invalid UPDATE format. Expected: UPDATE|RideID');
+            if (parts.length < 4) {
+                throw new Error('Invalid UPDATE format. Expected: UPDATE|RideID|Lat|Lng');
             }
             return {
                 type: SMSMessageType.UPDATE_REQUEST,
-                rideId: parts[1]
+                rideId: parts[1],
+                data: {
+                    lat: parseFloat(parts[2]),
+                    lng: parseFloat(parts[3])
+                }
             };
 
         case 'CANCEL':

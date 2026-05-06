@@ -1,36 +1,86 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, StatusBar } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, Alert, StatusBar, Platform, Keyboard, Animated, Dimensions, Modal, ScrollView as NativeScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Send } from 'lucide-react-native';
+import { ArrowLeft, MapPin, Navigation, XCircle, RefreshCw, Car, Terminal, X } from 'lucide-react-native';
 import io, { Socket } from 'socket.io-client';
+import * as Location from 'expo-location';
+import * as Notifications from 'expo-notifications';
+import MapView, { Marker } from 'react-native-maps';
+import { BlurView } from 'expo-blur';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:3000'; // Default for Android emulator
-const SIMULATED_PHONE = '+1234567890'; // Fixed phone for simulator
+// Must be enabled for OS notifications
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
 
-interface Message {
-    id: string;
-    text: string;
-    sender: 'user' | 'system';
-    timestamp: Date;
-}
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.10.153.151:3000';
+const SIMULATED_PHONE = '+1234567890';
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+type AppState = 'BOOKING' | 'WAITING' | 'CONFIRMED';
+type SMSLog = { type: 'OUTGOING' | 'INCOMING'; text: string; time: string };
 
 export default function SimulatorScreen() {
     const router = useRouter();
-    const [input, setInput] = useState('');
-    const [messages, setMessages] = useState<Message[]>([
-        {
-            id: 'init',
-            text: 'CabLite SMS Gateway. Send RIDEREQ|RideID|Lat|Lng|Destination to request a ride.',
-            sender: 'system',
-            timestamp: new Date()
-        }
-    ]);
+    
+    const [appState, setAppState] = useState<AppState>('BOOKING');
+    const [pickup, setPickup] = useState('Fetching location...');
+    const [dropoff, setDropoff] = useState('');
+    const [locationCoords, setLocationCoords] = useState<{lat: number, lng: number} | null>(null);
+    const [rideId, setRideId] = useState<string>('');
+    const [driverInfo, setDriverInfo] = useState<string>('');
+    const [isUpdating, setIsUpdating] = useState(false);
+    
     const [socket, setSocket] = useState<Socket | null>(null);
-    const scrollViewRef = useRef<ScrollView>(null);
+
+    // Keyboard & Animation state
+    const [keyboardHeight, setKeyboardHeight] = useState(0);
+    const [outgoingSMS, setOutgoingSMS] = useState<string | null>(null);
+    const smsFadeAnim = useRef(new Animated.Value(0)).current;
+
+    // SMS History State
+    const [smsHistory, setSmsHistory] = useState<SMSLog[]>([]);
+    const [isHistoryModalVisible, setIsHistoryModalVisible] = useState(false);
 
     useEffect(() => {
-        // Connect to Socket.io
+        const keyboardWillShow = Keyboard.addListener(
+            Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+            (e) => setKeyboardHeight(e.endCoordinates.height)
+        );
+        const keyboardWillHide = Keyboard.addListener(
+            Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+            () => setKeyboardHeight(0)
+        );
+
+        (async () => {
+            const { status: existingStatus } = await Notifications.getPermissionsAsync();
+            let finalStatus = existingStatus;
+            if (existingStatus !== 'granted') {
+                const { status } = await Notifications.requestPermissionsAsync();
+                finalStatus = status;
+            }
+
+            let { status: locStatus } = await Location.requestForegroundPermissionsAsync();
+            if (locStatus !== 'granted') {
+                setPickup('Times Square (Default)');
+                setLocationCoords({ lat: 40.7580, lng: -73.9855 });
+                return;
+            }
+            try {
+                let loc = await Location.getCurrentPositionAsync({});
+                setLocationCoords({ lat: loc.coords.latitude, lng: loc.coords.longitude });
+                setPickup(`Current Location (${loc.coords.latitude.toFixed(2)}, ${loc.coords.longitude.toFixed(2)})`);
+            } catch (e) {
+                setPickup('Central Station (Default)');
+                setLocationCoords({ lat: 40.7527, lng: -73.9772 });
+            }
+        })();
+
         const newSocket = io(API_URL);
         
         newSocket.on('connect', () => {
@@ -38,132 +88,328 @@ export default function SimulatorScreen() {
             newSocket.emit('register_simulator', { phoneNumber: SIMULATED_PHONE });
         });
 
-        newSocket.on('incoming_sms', (data: { message: string, timestamp: string }) => {
-            setMessages(prev => [...prev, {
-                id: Math.random().toString(36).substring(7),
-                text: data.message,
-                sender: 'system',
-                timestamp: new Date(data.timestamp)
-            }]);
+        newSocket.on('incoming_sms', async (data: { message: string, timestamp: string }) => {
+            const msg = data.message;
+            
+            // Log incoming SMS
+            setSmsHistory(prev => [...prev, { type: 'INCOMING', text: msg, time: new Date().toLocaleTimeString() }]);
+
+            if (msg.includes('accepted') || msg.includes('on the way')) {
+                setAppState('CONFIRMED');
+                setDriverInfo('Driver assigned and en route.');
+                await triggerNotification('Ride Confirmed! 🚕', 'Your driver is on the way.');
+            } else if (msg.includes('cancelled')) {
+                setAppState('BOOKING');
+                await triggerNotification('Ride Cancelled', 'Your request has been cancelled.');
+                Alert.alert('Ride Cancelled', msg);
+            } else if (msg.includes('ETA') || msg.includes('away') || msg.includes('Location updated')) {
+                setIsUpdating(false);
+                setDriverInfo(msg);
+                await triggerNotification('Ride Update', msg);
+            } else {
+                // Mock fallback if other updates are received
+                setIsUpdating(false);
+                setDriverInfo(msg);
+                await triggerNotification('CabLite Update', msg);
+            }
         });
 
         setSocket(newSocket);
 
         return () => {
+            keyboardWillShow.remove();
+            keyboardWillHide.remove();
             newSocket.disconnect();
         };
     }, []);
 
-    useEffect(() => {
-        // Auto scroll to bottom
-        setTimeout(() => {
-            scrollViewRef.current?.scrollToEnd({ animated: true });
-        }, 100);
-    }, [messages]);
+    const triggerNotification = async (title: string, body: string) => {
+        await Notifications.scheduleNotificationAsync({
+            content: { title, body, sound: true },
+            trigger: null,
+        });
+    };
 
-    const handleSend = async () => {
-        if (!input.trim()) return;
+    const displaySMSOverlay = (payload: string) => {
+        setOutgoingSMS(payload);
+        
+        // Log outgoing SMS
+        setSmsHistory(prev => [...prev, { type: 'OUTGOING', text: payload, time: new Date().toLocaleTimeString() }]);
 
-        const messageText = input.trim();
-        setInput('');
+        // Reset animation before starting (in case it was already running)
+        smsFadeAnim.setValue(0);
+        
+        // Extended display time (8 seconds)
+        Animated.sequence([
+            Animated.timing(smsFadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
+            Animated.delay(8000),
+            Animated.timing(smsFadeAnim, { toValue: 0, duration: 500, useNativeDriver: true })
+        ]).start(() => setOutgoingSMS(null));
+    };
 
-        // Add user message to UI
-        const newUserMsg: Message = {
-            id: Math.random().toString(36).substring(7),
-            text: messageText,
-            sender: 'user',
-            timestamp: new Date()
-        };
-        setMessages(prev => [...prev, newUserMsg]);
-
+    const sendSMSPayload = async (bodyText: string) => {
+        displaySMSOverlay(bodyText);
         try {
-            // Send to webhook directly
             await fetch(`${API_URL}/webhook/sms`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     From: SIMULATED_PHONE,
-                    Body: messageText,
+                    Body: bodyText,
                     MessageSid: `sim_${Math.random().toString(36).substring(7)}`
                 })
             });
         } catch (error) {
-            console.error('Failed to send simulated SMS', error);
-            setMessages(prev => [...prev, {
-                id: Math.random().toString(36).substring(7),
-                text: 'Error: Failed to connect to backend simulation.',
-                sender: 'system',
-                timestamp: new Date()
-            }]);
+            console.error('Failed to send payload', error);
+            // We simulate successful send even if network fails for offline feel
+            setSmsHistory(prev => [...prev, { type: 'INCOMING', text: 'Simulated Network Error. Ensure backend is running.', time: new Date().toLocaleTimeString() }]);
+            setAppState('BOOKING');
         }
     };
 
+    const handleBook = async () => {
+        if (!dropoff.trim()) {
+            Alert.alert('Error', 'Please enter a dropoff location.');
+            return;
+        }
+        if (!locationCoords) {
+            Alert.alert('Error', 'Location not acquired yet.');
+            return;
+        }
+
+        const newRideId = Math.random().toString(36).substring(7).toUpperCase();
+        setRideId(newRideId);
+        setAppState('WAITING');
+
+        await triggerNotification('Booking Started 📡', 'Broadcasting ride request via SMS...');
+
+        const payload = `RIDEREQ|${newRideId}|${locationCoords.lat}|${locationCoords.lng}|${dropoff.trim()}`;
+        sendSMSPayload(payload);
+    };
+
+    const handleCancel = async () => {
+        const payload = `CANCEL|${rideId}`;
+        sendSMSPayload(payload);
+        setAppState('BOOKING');
+    };
+
+    const handleUpdate = () => {
+        if (!locationCoords) return;
+        setIsUpdating(true);
+        setDriverInfo('Fetching an update for you...');
+        const payload = `UPDATE|${rideId}|${locationCoords.lat}|${locationCoords.lng}`;
+        sendSMSPayload(payload);
+    };
+
     return (
-        <SafeAreaView className="flex-1 bg-neutral-900">
-            <StatusBar barStyle="light-content" />
+        <SafeAreaView className="flex-1 bg-white" edges={['top', 'left', 'right']}>
+            <StatusBar barStyle="dark-content" />
             
+            {/* SMS Glass Overlay - Clickable */}
+            {outgoingSMS && (
+                <Animated.View 
+                    style={{ opacity: smsFadeAnim, position: 'absolute', top: 50, left: 16, right: 16, zIndex: 100 }}
+                >
+                    <TouchableOpacity activeOpacity={0.8} onPress={() => setIsHistoryModalVisible(true)}>
+                        <BlurView intensity={80} tint="dark" className="p-4 rounded-2xl overflow-hidden border border-white/20 flex-row items-center justify-between">
+                            <View className="flex-1">
+                                <Text className="text-white font-bold text-xs uppercase mb-1 tracking-widest text-emerald-400">Outgoing SMS</Text>
+                                <Text className="text-white font-mono text-sm leading-5">{outgoingSMS}</Text>
+                            </View>
+                            <Terminal color="#34d399" size={20} className="ml-2" />
+                        </BlurView>
+                    </TouchableOpacity>
+                </Animated.View>
+            )}
+
+            {/* SMS History Modal */}
+            <Modal
+                visible={isHistoryModalVisible}
+                animationType="slide"
+                presentationStyle="pageSheet"
+                onRequestClose={() => setIsHistoryModalVisible(false)}
+            >
+                <SafeAreaView className="flex-1 bg-gray-900">
+                    <View className="flex-row items-center justify-between p-4 border-b border-gray-800">
+                        <View className="flex-row items-center">
+                            <Terminal color="#34d399" size={24} className="mr-3" />
+                            <Text className="text-white text-xl font-bold">SMS Console Log</Text>
+                        </View>
+                        <TouchableOpacity onPress={() => setIsHistoryModalVisible(false)} className="p-2 bg-gray-800 rounded-full">
+                            <X color="#fff" size={20} />
+                        </TouchableOpacity>
+                    </View>
+                    
+                    <NativeScrollView className="flex-1 p-4">
+                        {smsHistory.length === 0 ? (
+                            <Text className="text-gray-500 text-center mt-10 italic">No SMS payloads sent yet.</Text>
+                        ) : (
+                            smsHistory.map((log, index) => (
+                                <View key={index} className={`mb-4 max-w-[85%] ${log.type === 'OUTGOING' ? 'self-end' : 'self-start'}`}>
+                                    <Text className="text-xs text-gray-500 mb-1 px-1">
+                                        {log.type === 'OUTGOING' ? 'To: CabLite Gateway' : 'From: CabLite Gateway'} • {log.time}
+                                    </Text>
+                                    <View className={`p-3 rounded-2xl ${log.type === 'OUTGOING' ? 'bg-emerald-600 rounded-tr-sm' : 'bg-gray-800 rounded-tl-sm border border-gray-700'}`}>
+                                        <Text className={`font-mono text-sm ${log.type === 'OUTGOING' ? 'text-white' : 'text-emerald-400'}`}>
+                                            {log.text}
+                                        </Text>
+                                    </View>
+                                </View>
+                            ))
+                        )}
+                        <View className="h-10" />
+                    </NativeScrollView>
+                </SafeAreaView>
+            </Modal>
+
             {/* Header */}
-            <View className="flex-row items-center p-4 border-b border-neutral-800 bg-neutral-900">
+            <View className="flex-row items-center p-4 border-b border-gray-200 bg-white z-10">
                 <TouchableOpacity onPress={() => router.replace('/welcome')} className="p-2 mr-2">
-                    <ArrowLeft color="#fff" size={24} />
+                    <ArrowLeft color="#000" size={24} />
                 </TouchableOpacity>
                 <View>
-                    <Text className="text-white text-lg font-bold">CabLite Gateway</Text>
-                    <Text className="text-emerald-500 text-xs font-medium">● Connected (Simulation)</Text>
+                    <Text className="text-black text-xl font-bold tracking-tight">Cab<Text className="text-emerald-600">Lite</Text></Text>
                 </View>
+                <TouchableOpacity onPress={() => setIsHistoryModalVisible(true)} className="ml-auto p-2">
+                    <Terminal color="#059669" size={20} />
+                </TouchableOpacity>
             </View>
 
-            {/* Chat Area */}
-            <KeyboardAvoidingView 
-                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                className="flex-1"
-            >
-                <ScrollView 
-                    ref={scrollViewRef}
-                    className="flex-1 px-4 py-6"
-                    contentContainerStyle={{ paddingBottom: 20 }}
-                >
-                    {messages.map((msg) => (
-                        <View 
-                            key={msg.id} 
-                            className={`mb-4 max-w-[80%] rounded-lg p-3 ${
-                                msg.sender === 'user' 
-                                    ? 'bg-emerald-600 self-end rounded-tr-none' 
-                                    : 'bg-neutral-800 self-start border border-neutral-700 rounded-tl-none'
-                            }`}
-                        >
-                            <Text className={`text-base ${msg.sender === 'user' ? 'text-white' : 'text-neutral-200'}`}>
-                                {msg.text}
-                            </Text>
-                            <Text className={`text-[10px] mt-1 ${msg.sender === 'user' ? 'text-emerald-200' : 'text-neutral-500'}`}>
-                                {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </Text>
-                        </View>
-                    ))}
-                </ScrollView>
-
-                {/* Input Area */}
-                <View className="p-4 border-t border-neutral-800 bg-neutral-900 flex-row items-center">
-                    <TextInput
-                        value={input}
-                        onChangeText={setInput}
-                        placeholder="Type SMS command (e.g. RIDEREQ|...)"
-                        placeholderTextColor="#737373"
-                        className="flex-1 bg-neutral-800 text-white border border-neutral-700 rounded-full px-4 py-3 mr-3 font-mono text-sm"
-                        autoCapitalize="none"
-                        autoCorrect={false}
-                    />
-                    <TouchableOpacity 
-                        onPress={handleSend}
-                        disabled={!input.trim()}
-                        className={`p-3 rounded-full ${input.trim() ? 'bg-emerald-600' : 'bg-neutral-800'}`}
-                    >
-                        <Send color={input.trim() ? '#fff' : '#525252'} size={20} />
-                    </TouchableOpacity>
+            {/* Welcome Banner */}
+            {appState === 'BOOKING' && (
+                <View className="bg-emerald-50 p-4 items-center justify-center border-b border-emerald-100 z-10">
+                    <Text className="text-emerald-800 font-bold text-base mb-1">Welcome to CabLite! 👋</Text>
+                    <Text className="text-emerald-600 text-center px-4 text-xs">No network? No problem. Book via SMS.</Text>
                 </View>
-            </KeyboardAvoidingView>
+            )}
+
+            {/* Map Area */}
+            <View className="flex-1 relative">
+                {locationCoords ? (
+                    <MapView 
+                        style={{ flex: 1 }}
+                        initialRegion={{
+                            latitude: locationCoords.lat,
+                            longitude: locationCoords.lng,
+                            latitudeDelta: 0.05,
+                            longitudeDelta: 0.05,
+                        }}
+                    >
+                        <Marker coordinate={{ latitude: locationCoords.lat, longitude: locationCoords.lng }} />
+                    </MapView>
+                ) : (
+                    <View className="flex-1 bg-gray-100 items-center justify-center">
+                        <ActivityIndicator color="#059669" />
+                        <Text className="text-gray-400 mt-2">Loading Map...</Text>
+                    </View>
+                )}
+            </View>
+
+            {/* Bottom UI */}
+            <Animated.View 
+                className="bg-white p-6 shadow-2xl border-t border-gray-200" 
+                style={{ 
+                    paddingBottom: Platform.OS === 'ios' ? 40 : 20,
+                    marginBottom: keyboardHeight 
+                }}
+            >
+                {appState === 'BOOKING' && (
+                    <View>
+                        <Text className="text-xl font-bold mb-4">Where to?</Text>
+                        
+                        <View className="relative mb-6">
+                            <View className="absolute left-[11px] top-5 bottom-5 w-0.5 bg-gray-300" />
+                            
+                            <View className="flex-row items-center mb-4">
+                                <View className="w-6 h-6 rounded-full bg-blue-100 items-center justify-center mr-3 z-10">
+                                    <View className="w-2 h-2 rounded-full bg-blue-600" />
+                                </View>
+                                <TextInput
+                                    value={pickup}
+                                    editable={false}
+                                    className="flex-1 bg-gray-100 text-gray-600 rounded-lg px-4 py-3 font-medium"
+                                />
+                            </View>
+
+                            <View className="flex-row items-center">
+                                <View className="w-6 h-6 rounded-full bg-emerald-100 items-center justify-center mr-3 z-10">
+                                    <MapPin color="#059669" size={12} />
+                                </View>
+                                <TextInput
+                                    value={dropoff}
+                                    onChangeText={setDropoff}
+                                    placeholder="Enter dropoff location"
+                                    placeholderTextColor="#9CA3AF"
+                                    className="flex-1 bg-gray-100 text-black rounded-lg px-4 py-3 font-medium border border-gray-200"
+                                    autoCapitalize="words"
+                                />
+                            </View>
+                        </View>
+
+                        <TouchableOpacity 
+                            onPress={handleBook}
+                            className="bg-black py-4 rounded-xl flex-row justify-center items-center"
+                        >
+                            <Text className="text-white text-lg font-bold mr-2">Book Offline Ride</Text>
+                            <Navigation color="#fff" size={18} />
+                        </TouchableOpacity>
+                    </View>
+                )}
+
+                {appState === 'WAITING' && (
+                    <View className="items-center py-4">
+                        <ActivityIndicator size="large" color="#059669" className="mb-4" />
+                        <Text className="text-xl font-bold mb-2">Finding your driver</Text>
+                        <Text className="text-gray-500 text-center px-4">Broadcasting your request to nearby drivers via SMS Gateway...</Text>
+                        
+                        <TouchableOpacity 
+                            onPress={handleCancel}
+                            className="mt-6 py-3 px-6 rounded-full border border-red-200 bg-red-50"
+                        >
+                            <Text className="text-red-600 font-bold">Cancel Request</Text>
+                        </TouchableOpacity>
+                    </View>
+                )}
+
+                {appState === 'CONFIRMED' && (
+                    <View>
+                        <View className="flex-row justify-between items-center mb-6 border-b border-gray-100 pb-4">
+                            <View className="flex-1 mr-4">
+                                <Text className="text-emerald-600 font-bold uppercase tracking-wider text-xs mb-1">Ride Confirmed</Text>
+                                <Text className="text-xl font-black text-black leading-6">{driverInfo}</Text>
+                            </View>
+                            <View className="bg-gray-100 p-3 rounded-full">
+                                <Car color="#000" size={24} />
+                            </View>
+                        </View>
+
+                        <View className="flex-row gap-4">
+                            <TouchableOpacity 
+                                onPress={handleCancel}
+                                disabled={isUpdating}
+                                className="flex-1 py-4 rounded-xl bg-gray-100 flex-row justify-center items-center opacity-90"
+                            >
+                                <XCircle color="#ef4444" size={18} className="mr-2" />
+                                <Text className="text-red-500 font-bold">Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                                onPress={handleUpdate}
+                                disabled={isUpdating}
+                                className="flex-1 py-4 rounded-xl bg-black flex-row justify-center items-center"
+                            >
+                                {isUpdating ? (
+                                    <ActivityIndicator color="#fff" size="small" />
+                                ) : (
+                                    <>
+                                        <RefreshCw color="#fff" size={18} className="mr-2" />
+                                        <Text className="text-white font-bold">Get Update</Text>
+                                    </>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                )}
+            </Animated.View>
         </SafeAreaView>
     );
 }
