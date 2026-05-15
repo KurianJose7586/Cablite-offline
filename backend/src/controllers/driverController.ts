@@ -42,7 +42,7 @@ export class DriverController {
                     throw new Error(`Ride is not available (current state: ${rideData.state})`);
                 }
 
-                // Check if driver is available
+                // Check if driver is available (read for specific error messages)
                 const driver = await tx.driver.findUnique({
                     where: { id: driverId }
                 });
@@ -59,6 +59,22 @@ export class DriverController {
                     throw new Error('Driver already has an active ride');
                 }
 
+                // Atomically update driver to ensure no concurrent accept succeeded between the check and update
+                const driverUpdateResult = await tx.driver.updateMany({
+                    where: { 
+                        id: driverId,
+                        status: 'ONLINE',
+                        activeRideId: null
+                    },
+                    data: {
+                        activeRideId: rideId
+                    }
+                });
+
+                if (driverUpdateResult.count === 0) {
+                    throw new Error('Driver is no longer available (race condition prevented)');
+                }
+
                 // Update ride with driver
                 const updatedRide = await tx.ride.update({
                     where: { id: rideId },
@@ -70,14 +86,6 @@ export class DriverController {
                     include: {
                         passenger: true,
                         driver: true
-                    }
-                });
-
-                // Update driver with active ride
-                await tx.driver.update({
-                    where: { id: driverId },
-                    data: {
-                        activeRideId: rideId
                     }
                 });
 

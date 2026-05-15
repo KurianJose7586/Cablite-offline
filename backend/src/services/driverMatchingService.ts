@@ -26,7 +26,8 @@ export class DriverMatchingService {
     ): Promise<NearbyDriver[]> {
         try {
             // Use PostGIS ST_DWithin for efficient spatial query
-            // ST_MakePoint creates a point from lng, lat (note: longitude first!)
+            // VERY IMPORTANT: ST_MakePoint creates a point from (longitude, latitude) exactly in that order!
+            // Do NOT change this to (lat, lng) or spatial queries will fail silently or return incorrect results.
             // ST_DWithin uses meters for geography type
             const radiusMeters = radiusKm * 1000;
 

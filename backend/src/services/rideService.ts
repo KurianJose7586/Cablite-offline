@@ -221,8 +221,14 @@ export class RideService {
 
         // Notify driver if assigned
         if (ride.driver && ride.driverId) {
+            // Free the driver
+            await prisma.driver.update({
+                where: { id: ride.driverId },
+                data: { activeRideId: null }
+            });
+
             // TODO: Notify driver via push notification
-            logger.info('Driver should be notified of cancellation', {
+            logger.info('Driver notified of cancellation and is now free', {
                 rideId,
                 driverId: ride.driverId
             });

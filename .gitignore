@@ -48,3 +48,6 @@ build/
 
 # development tools
 debug-logs/
+
+*.agent/*
+.skills/

@@ -52,10 +52,10 @@ export class RateLimitService {
                 }
             }
 
-            // 2. Check rate limit (max 5 updates per 2 minutes)
-            const updateCount = await this.getUpdateCount(passengerId);
+            // 2. Atomic increment and check rate limit (max 5 updates per 2 minutes)
+            const updateCount = await this.incrementAndGetUpdateCount(passengerId);
 
-            if (updateCount >= RATE_LIMIT_MAX_UPDATES) {
+            if (updateCount > RATE_LIMIT_MAX_UPDATES) {
                 const ttl = await this.getCounterTTL(passengerId);
                 const cooldownMinutes = Math.ceil(ttl / 60);
 
@@ -73,11 +73,10 @@ export class RateLimitService {
                 };
             }
 
-            // 3. Allow update and increment counter
-            await this.incrementUpdateCount(passengerId);
+            // 3. Allow update and save location
             await this.saveLastLocation(passengerId, newLat, newLng);
 
-            const remaining = RATE_LIMIT_MAX_UPDATES - updateCount - 1;
+            const remaining = RATE_LIMIT_MAX_UPDATES - updateCount;
 
             logger.debug('Update allowed', {
                 passengerId,
@@ -140,18 +139,9 @@ export class RateLimitService {
     }
 
     /**
-     * Get current update count for passenger
+     * Increment update counter atomically and return new count
      */
-    private async getUpdateCount(passengerId: string): Promise<number> {
-        const key = `ratelimit:passenger:${passengerId}:count`;
-        const count = await redis.get(key);
-        return count ? parseInt(count) : 0;
-    }
-
-    /**
-     * Increment update counter for passenger
-     */
-    private async incrementUpdateCount(passengerId: string): Promise<void> {
+    private async incrementAndGetUpdateCount(passengerId: string): Promise<number> {
         const key = `ratelimit:passenger:${passengerId}:count`;
         const count = await redis.incr(key);
 
@@ -159,6 +149,8 @@ export class RateLimitService {
         if (count === 1) {
             await redis.expire(key, RATE_LIMIT_COOLDOWN_SECONDS);
         }
+        
+        return count;
     }
 
     /**
