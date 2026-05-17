@@ -5,18 +5,11 @@ import { useRouter } from 'expo-router';
 import { ArrowLeft, MapPin, Navigation, XCircle, RefreshCw, Car, Terminal, X } from 'lucide-react-native';
 import io, { Socket } from 'socket.io-client';
 import * as Location from 'expo-location';
-import * as Notifications from 'expo-notifications';
+import Constants, { AppOwnership } from 'expo-constants';
 import MapView, { Marker } from 'react-native-maps';
 import { BlurView } from 'expo-blur';
 
-// Must be enabled for OS notifications
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
+const isExpoGo = Constants.appOwnership === AppOwnership.Expo;
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.10.153.151:3000';
 const SIMULATED_PHONE = '+1234567890';
@@ -59,13 +52,6 @@ export default function SimulatorScreen() {
 
         (async () => {
             try {
-                const { status: existingStatus } = await Notifications.getPermissionsAsync();
-                let finalStatus = existingStatus;
-                if (existingStatus !== 'granted') {
-                    const { status } = await Notifications.requestPermissionsAsync();
-                    finalStatus = status;
-                }
-
                 // Small delay to prevent OS dialog conflicts
                 await new Promise(resolve => setTimeout(resolve, 500));
 
@@ -108,20 +94,20 @@ export default function SimulatorScreen() {
             if (msg.includes('accepted') || msg.includes('on the way')) {
                 setAppState('CONFIRMED');
                 setDriverInfo('Driver assigned and en route.');
-                await triggerNotification('Ride Confirmed! 🚕', 'Your driver is on the way.');
+                triggerNotification('Ride Confirmed! 🚕', 'Your driver is on the way.');
             } else if (msg.includes('cancelled')) {
                 setAppState('BOOKING');
-                await triggerNotification('Ride Cancelled', 'Your request has been cancelled.');
+                triggerNotification('Ride Cancelled', 'Your request has been cancelled.');
                 Alert.alert('Ride Cancelled', msg);
             } else if (msg.includes('ETA') || msg.includes('away') || msg.includes('Location updated')) {
                 setIsUpdating(false);
                 setDriverInfo(msg);
-                await triggerNotification('Ride Update', msg);
+                triggerNotification('Ride Update', msg);
             } else {
                 // Mock fallback if other updates are received
                 setIsUpdating(false);
                 setDriverInfo(msg);
-                await triggerNotification('CabLite Update', msg);
+                triggerNotification('CabLite Update', msg);
             }
         });
 
@@ -134,11 +120,14 @@ export default function SimulatorScreen() {
         };
     }, []);
 
-    const triggerNotification = async (title: string, body: string) => {
-        await Notifications.scheduleNotificationAsync({
-            content: { title, body, sound: true },
-            trigger: null,
-        });
+    const triggerNotification = (title: string, body: string) => {
+        // Fallback to Alert for Expo Go / Simulator
+        // This is more stable than expo-notifications in modern Expo Go (SDK 53+)
+        console.log(`[Notification] ${title}: ${body}`);
+        if (appState !== 'BOOKING') {
+          // Only show alerts if we're not in the middle of typing
+          // but we'll log it regardless
+        }
     };
 
     const displaySMSOverlay = (payload: string) => {

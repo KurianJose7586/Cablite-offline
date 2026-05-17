@@ -20,22 +20,18 @@ export class DriverController {
 
             // Use atomic locking to prevent race conditions
             const result = await prisma.$transaction(async (tx) => {
-                // Lock the ride row with FOR UPDATE (exclude geography columns that Prisma can't deserialize)
-                const ride = await tx.$queryRaw<any[]>`
-          SELECT 
-            id, "passengerId", "driverId", "pickupLat", "pickupLng", 
-            "destinationText", state, "createdAt", "acceptedAt", 
-            "completedAt", "broadcastExpiresAt", "twilioMessageSid"
-          FROM "Ride"
-          WHERE id = ${rideId}
-          FOR UPDATE
-        `;
+                // Lock the ride row with FOR UPDATE using $executeRaw
+                // This avoids fetching columns that Prisma can't deserialize (like geography)
+                await tx.$executeRaw`SELECT id FROM "Ride" WHERE id = ${rideId} FOR UPDATE`;
 
-                if (ride.length === 0) {
+                // Fetch ride data using standard findUnique which only selects columns in the schema
+                const rideData = await tx.ride.findUnique({
+                    where: { id: rideId }
+                });
+
+                if (!rideData) {
                     throw new Error('Ride not found');
                 }
-
-                const rideData = ride[0];
 
                 // Check if ride is still in BROADCASTING state
                 if (rideData.state !== 'BROADCASTING') {
@@ -157,8 +153,8 @@ export class DriverController {
                 return;
             }
 
-            // Update driver location
-            await prisma.driver.update({
+            // Update driver location with updateMany to avoid crash if not found
+            const updateResult = await prisma.driver.updateMany({
                 where: { id: driverId },
                 data: {
                     currentLat: lat,
@@ -166,6 +162,11 @@ export class DriverController {
                     lastLocationUpdate: new Date()
                 }
             });
+
+            if (updateResult.count === 0) {
+                res.status(404).json({ error: 'Driver not found' });
+                return;
+            }
 
             // Emit driver moved event
             const driver = await prisma.driver.findUnique({

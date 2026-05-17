@@ -37,10 +37,10 @@ export class DriverMatchingService {
           d."userId",
           d."currentLat",
           d."currentLng",
-          ST_Distance(
+          CAST(ST_Distance(
             d.location,
             ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)::geography
-          ) as "distanceMeters"
+          ) AS FLOAT) as "distanceMeters"
         FROM "Driver" d
         WHERE 
           d.status = 'ONLINE'

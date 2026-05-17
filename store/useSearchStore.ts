@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import * as SQLite from 'expo-sqlite';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { Asset } from 'expo-asset';
 
 export interface POI {
@@ -44,47 +44,50 @@ export const useSearchStore = create<SearchState>((set, get) => ({
                 await FileSystem.makeDirectoryAsync(dbDir, { intermediates: true });
             }
 
-            // For now, check if the DB exists, if not, we'll create a mock one for testing
-            // In a real app, this would be downloaded from a CDN
-            const fileInfo = await FileSystem.getInfoAsync(dbPath);
-            if (!fileInfo.exists) {
-                console.log('Creating initial mock vital database...');
-                const db = await SQLite.openDatabaseAsync(DB_NAME);
-                
-                await db.execAsync(`
-                    PRAGMA journal_mode = WAL;
-                    CREATE TABLE IF NOT EXISTS pois (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        name TEXT NOT NULL,
-                        category TEXT,
-                        latitude REAL NOT NULL,
-                        longitude REAL NOT NULL,
-                        rank INTEGER DEFAULT 0
-                    );
-                    CREATE VIRTUAL TABLE IF NOT EXISTS pois_fts USING fts5(
-                        name,
-                        content='pois',
-                        content_rowid='id'
-                    );
-                `);
+            // Check if DB exists
+            let fileInfo = await FileSystem.getInfoAsync(dbPath);
+            let shouldCopy = !fileInfo.exists;
 
-                // Insert some mock Vital Tier data (Delhi example)
-                await db.runAsync('INSERT INTO pois (name, category, latitude, longitude, rank) VALUES (?, ?, ?, ?, ?)', 
-                    ['Indira Gandhi International Airport', 'airport', 28.5562, 77.1000, 100]);
-                await db.runAsync('INSERT INTO pois (name, category, latitude, longitude, rank) VALUES (?, ?, ?, ?, ?)', 
-                    ['AIIMS Hospital', 'hospital', 28.5672, 77.2100, 95]);
-                await db.runAsync('INSERT INTO pois (name, category, latitude, longitude, rank) VALUES (?, ?, ?, ?, ?)', 
-                    ['New Delhi Railway Station', 'transport', 28.6417, 77.2219, 90]);
-                await db.runAsync('INSERT INTO pois (name, category, latitude, longitude, rank) VALUES (?, ?, ?, ?, ?)', 
-                    ['DLF Promenade Mall', 'shopping', 28.5441, 77.1557, 80]);
-                await db.runAsync('INSERT INTO pois (name, category, latitude, longitude, rank) VALUES (?, ?, ?, ?, ?)', 
-                    ['Safdarjung Hospital', 'hospital', 28.5672, 77.2084, 85]);
-
-                // Update FTS index
-                await db.execAsync(`
-                    INSERT INTO pois_fts(rowid, name) SELECT id, name FROM pois;
-                `);
+            if (fileInfo.exists) {
+                // If it exists, let's check if it's actually populated
+                try {
+                    const db = await SQLite.openDatabaseAsync(DB_NAME);
+                    const countRow = await db.getFirstAsync<{count: number}>('SELECT COUNT(*) as count FROM pois');
+                    if (!countRow || countRow.count === 0) {
+                        console.log('Database found but empty. Forcing re-copy...');
+                        shouldCopy = true;
+                        await db.closeAsync();
+                    }
+                } catch (e) {
+                    console.log('Database corrupted or missing tables. Forcing re-copy...');
+                    shouldCopy = true;
+                }
             }
+
+            if (shouldCopy) {
+                console.log('Copying real-world database from assets...');
+                const asset = Asset.fromModule(require('../assets/vital_tier.db'));
+                await asset.downloadAsync();
+                
+                if (asset.localUri) {
+                    // Delete old file if it exists to be safe
+                    if (fileInfo.exists) {
+                        await FileSystem.deleteAsync(dbPath, { idempotent: true });
+                    }
+                    await FileSystem.copyAsync({
+                        from: asset.localUri,
+                        to: dbPath
+                    });
+                } else {
+                    throw new Error('Could not get local URI for database asset');
+                }
+            }
+
+            console.log('Opening real-world search database...');
+            const db = await SQLite.openDatabaseAsync(DB_NAME);
+            
+            // Just ensure WAL mode for performance
+            await db.execAsync('PRAGMA journal_mode = WAL;');
             
             set({ availableShards: [DB_NAME] });
         } catch (error) {
@@ -106,6 +109,9 @@ export const useSearchStore = create<SearchState>((set, get) => ({
             const db = await SQLite.openDatabaseAsync(DB_NAME);
             
             // Search using FTS5 for speed and fuzzy-like matching
+            // Split query into words and add wildcard to each
+            const formattedQuery = query.trim().split(/\s+/).map(word => `${word}*`).join(' ');
+
             const results = await db.getAllAsync<any>(`
                 SELECT p.* 
                 FROM pois p
@@ -113,7 +119,7 @@ export const useSearchStore = create<SearchState>((set, get) => ({
                 WHERE f.name MATCH ?
                 ORDER BY p.rank DESC
                 LIMIT 10
-            `, [`${query}*`]);
+            `, [formattedQuery]);
 
             const formattedResults: POI[] = results.map(row => ({
                 id: row.id,

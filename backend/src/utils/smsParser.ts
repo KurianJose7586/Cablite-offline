@@ -5,6 +5,7 @@ export enum SMSMessageType {
     RIDE_REQUEST = 'RIDEREQ',
     UPDATE_REQUEST = 'UPDATE',
     CANCEL_REQUEST = 'CANCEL',
+    SEARCH_REQUEST = 'SRCH',
     UNKNOWN = 'UNKNOWN'
 }
 
@@ -18,6 +19,7 @@ export interface ParsedSMS {
         lat?: number;
         lng?: number;
         destination?: string;
+        query?: string;
     };
 }
 
@@ -25,8 +27,9 @@ export interface ParsedSMS {
  * Parse incoming SMS message
  * Formats:
  * - RIDEREQ|RideID|Lat|Lng|Destination
- * - UPDATE|RideID
+ * - UPDATE|RideID|Lat|Lng
  * - CANCEL|RideID
+ * - SRCH|Query
  */
 export function parseSMS(body: string): ParsedSMS {
     const trimmed = body.trim();
@@ -39,6 +42,18 @@ export function parseSMS(body: string): ParsedSMS {
     const command = parts[0].toUpperCase();
 
     switch (command) {
+        case 'SRCH':
+            if (parts.length < 2) {
+                throw new Error('Invalid SRCH format. Expected: SRCH|Query');
+            }
+            return {
+                type: SMSMessageType.SEARCH_REQUEST,
+                rideId: '',
+                data: {
+                    query: parts.slice(1).join('|')
+                }
+            };
+
         case 'RIDEREQ':
             if (parts.length < 5) {
                 throw new Error('Invalid RIDEREQ format. Expected: RIDEREQ|RideID|Lat|Lng|Destination');

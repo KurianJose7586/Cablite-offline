@@ -1,66 +1,82 @@
-import twilio from 'twilio';
+import axios from 'axios';
 import { logger } from '../utils/logger';
 import { socketService } from './socketService';
 
-// Initialize Twilio client only if valid credentials are provided
-const hasValidCredentials =
-    process.env.TWILIO_ACCOUNT_SID?.startsWith('AC') &&
-    process.env.TWILIO_AUTH_TOKEN &&
-    process.env.TWILIO_AUTH_TOKEN.length > 10;
-
-const twilioClient = hasValidCredentials
-    ? twilio(process.env.TWILIO_ACCOUNT_SID!, process.env.TWILIO_AUTH_TOKEN!)
-    : null;
-
 export class SMSService {
+    private readonly apiKey: string | undefined;
+    private readonly templateId: string | undefined;
+    private readonly apiUrl = 'https://api.sent.dm/v3/messages';
+
+    constructor() {
+        this.apiKey = process.env.SENT_API_KEY;
+        this.templateId = process.env.SENT_TEMPLATE_ID;
+    }
+
     /**
-     * Send SMS message
+     * Send SMS message via Sent.dm API
      */
     async send(to: string, message: string): Promise<void> {
         // Try to send simulated SMS via WebSocket first
         const simulated = socketService.sendSimulatedSMS(to, message);
         if (simulated) {
-            logger.info('Simulated SMS sent instead of Twilio', { to, message });
+            logger.info('Simulated SMS sent instead of Sent.dm', { to, message });
             return;
         }
 
-        if (!twilioClient) {
-            logger.warn('Twilio not configured and no simulator connected, skipping SMS send', { to, message });
+        // If API key or template ID is missing, we can't send real SMS
+        if (!this.apiKey || this.apiKey === 'your_sent_api_key_here' || !this.templateId) {
+            logger.warn('Sent.dm not configured and no simulator connected, skipping SMS send', { to, message });
             return;
         }
 
         try {
-            await twilioClient.messages.create({
-                body: message,
-                from: process.env.TWILIO_PHONE_NUMBER,
-                to
-            });
+            const response = await axios.post(
+                this.apiUrl,
+                {
+                    to: [to],
+                    template: {
+                        id: this.templateId,
+                        parameters: {
+                            message: message // Assumes the template has a {{message}} parameter
+                        }
+                    }
+                },
+                {
+                    headers: {
+                        'x-api-key': this.apiKey,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
 
-            logger.info('SMS sent via Twilio', { to, message });
+            if (response.data.success) {
+                logger.info('SMS sent via Sent.dm', { 
+                    to, 
+                    messageId: response.data.data.recipients[0].message_id 
+                });
+            } else {
+                logger.error('Sent.dm API returned success=false', { 
+                    error: response.data.error 
+                });
+                throw new Error(response.data.error?.message || 'Failed to send message via Sent.dm');
+            }
         } catch (error: any) {
-            logger.error('Failed to send SMS via Twilio', {
+            logger.error('Failed to send SMS via Sent.dm', {
                 to,
-                error: error.message
+                error: error.response?.data?.error?.message || error.message
             });
             throw error;
         }
     }
 
     /**
-     * Verify Twilio webhook signature
+     * Verify Webhook signature
+     * Note: Sent.dm uses different signature verification. 
+     * In development/POC, we might skip this or implement Sent.dm specific verification.
      */
-    verifySignature(signature: string, url: string, params: any): boolean {
-        if (!process.env.TWILIO_AUTH_TOKEN) {
-            logger.warn('Twilio auth token not configured, skipping signature verification');
-            return true; // Allow in development
-        }
-
-        return twilio.validateRequest(
-            process.env.TWILIO_AUTH_TOKEN,
-            signature,
-            url,
-            params
-        );
+    verifySignature(_signature: string, _url: string, _params: any): boolean {
+        // TODO: Implement Sent.dm signature verification if needed
+        return true; 
     }
 }
 

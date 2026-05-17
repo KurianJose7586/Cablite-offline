@@ -89,6 +89,20 @@ export class SMSController {
                     await rideService.handleCancelRequest(From, parsed.rideId);
                     break;
 
+                case SMSMessageType.SEARCH_REQUEST:
+                    if (!parsed.data?.query) {
+                        await smsService.send(From, 'SRCH requires a query: SRCH|LocationName');
+                        break;
+                    }
+                    // Implement mock search logic for POC
+                    logger.info('Handling Deep Search request', { query: parsed.data.query, from: From });
+                    // Simulate a delay and then reply
+                    setTimeout(async () => {
+                        const mockResult = `SEARCH_REPLY|${parsed.data?.query} (Mock)|28.6139|77.2090`;
+                        await smsService.send(From, mockResult);
+                    }, 2000);
+                    break;
+
                 case SMSMessageType.UNKNOWN:
                     await smsService.send(
                         From,

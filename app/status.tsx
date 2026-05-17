@@ -96,17 +96,35 @@ export default function RideStatusScreen() {
             return;
         }
 
-        const isAvailable = await SMS.isAvailableAsync();
-        if (isAvailable) {
-            const message = `UPDATE ${rideId}`;
-            const { result } = await SMS.sendSMSAsync(
-                [backendNumber],
-                message
-            );
-            if (result === 'sent' || result === 'unknown') {
-                incrementUpdateCount();
-                Alert.alert('Location Update Sent', 'Your location update has been sent to the driver.');
+        try {
+            const isAvailable = await SMS.isAvailableAsync();
+            if (isAvailable) {
+                // Fetch current location for the update
+                const location = await Location.getCurrentPositionAsync({
+                    accuracy: Location.Accuracy.Balanced,
+                });
+
+                const lat = location.coords.latitude.toFixed(6);
+                const lng = location.coords.longitude.toFixed(6);
+                
+                // Correct format: UPDATE|RideID|Lat|Lng
+                const message = `UPDATE|${rideId}|${lat}|${lng}`;
+                
+                const { result } = await SMS.sendSMSAsync(
+                    [backendNumber],
+                    message
+                );
+                
+                if (result === 'sent' || result === 'unknown') {
+                    incrementUpdateCount();
+                    Alert.alert('Location Update Sent', 'Your location update has been sent to the driver.');
+                }
+            } else {
+                Alert.alert('SMS not available', 'This device does not support SMS.');
             }
+        } catch (error) {
+            console.error('Error sending location update:', error);
+            Alert.alert('Update Error', 'Could not fetch location or send SMS. Please try again.');
         }
     };
 

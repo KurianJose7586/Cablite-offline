@@ -130,9 +130,16 @@ class SimulationService {
                             
                             // For simulation, we'll directly do the transaction here to simulate accept.
                             await prisma.$transaction(async (tx) => {
-                                const lockedRide = await tx.$queryRaw<any[]>`SELECT id FROM "Ride" WHERE id = ${ride.id} AND state = 'BROADCASTING' FOR UPDATE`;
-                                if (lockedRide.length === 0) throw new Error('Ride taken');
+                                // Lock the ride row with FOR UPDATE using $executeRaw
+                                await tx.$executeRaw`SELECT id FROM "Ride" WHERE id = ${ride.id} AND state = 'BROADCASTING' FOR UPDATE`;
 
+                                const lockedRide = await tx.ride.findUnique({
+                                    where: { id: ride.id }
+                                });
+
+                                if (!lockedRide || lockedRide.state !== 'BROADCASTING') {
+                                    throw new Error('Ride taken');
+                                }
                                 await tx.ride.update({
                                     where: { id: ride.id },
                                     data: { driverId: driver.id, state: 'ACCEPTED', acceptedAt: new Date() }
