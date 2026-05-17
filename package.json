@@ -19,6 +19,7 @@
     "expo-notifications": "~0.32.17",
     "expo-router": "~6.0.23",
     "expo-sms": "~14.0.8",
+    "expo-sqlite": "~15.0.6",
     "expo-status-bar": "~3.0.9",
     "lucide-react-native": "^0.564.0",
     "nativewind": "^4.2.1",

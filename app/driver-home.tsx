@@ -36,21 +36,45 @@ export default function DriverHomeScreen() {
 
     const fetchLocation = async () => {
         setLoadingLocation(true);
-        let { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-            Alert.alert('Location Denied', 'Permission to access location was denied');
-            setLoadingLocation(false);
-            return;
-        }
+        try {
+            let { status } = await Location.requestForegroundPermissionsAsync();
+            if (status !== 'granted') {
+                Alert.alert('Location Denied', 'Permission to access location was denied. Please enable it in settings.');
+                setLoadingLocation(false);
+                return;
+            }
 
-        let loc = await Location.getCurrentPositionAsync({});
-        setLocation(loc);
-        setLoadingLocation(false);
+            const lastKnown = await Location.getLastKnownPositionAsync({});
+            if (lastKnown && !location) {
+                setLocation(lastKnown);
+            }
+
+            let loc = await Location.getCurrentPositionAsync({
+                accuracy: Location.Accuracy.Balanced,
+                timeInterval: 5000,
+                mayShowUserSettingsDialog: true,
+            });
+            setLocation(loc);
+        } catch (error) {
+            console.error('Error fetching location:', error);
+            // Don't alert here as it might be annoying on every online toggle if it's called repeatedly
+        } finally {
+            setLoadingLocation(false);
+        }
     };
 
     useEffect(() => {
-        fetchLocation();
-    }, []);
+        let interval: NodeJS.Timeout;
+        if (isDriverOnline) {
+            // Fetch immediately when going online
+            fetchLocation();
+            // Then every 30 seconds
+            interval = setInterval(fetchLocation, 30000);
+        }
+        return () => {
+            if (interval) clearInterval(interval);
+        };
+    }, [isDriverOnline]);
 
     const simulateRideRequest = () => {
         if (!location) {

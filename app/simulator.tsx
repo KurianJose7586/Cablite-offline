@@ -58,26 +58,37 @@ export default function SimulatorScreen() {
         );
 
         (async () => {
-            const { status: existingStatus } = await Notifications.getPermissionsAsync();
-            let finalStatus = existingStatus;
-            if (existingStatus !== 'granted') {
-                const { status } = await Notifications.requestPermissionsAsync();
-                finalStatus = status;
-            }
-
-            let { status: locStatus } = await Location.requestForegroundPermissionsAsync();
-            if (locStatus !== 'granted') {
-                setPickup('Times Square (Default)');
-                setLocationCoords({ lat: 40.7580, lng: -73.9855 });
-                return;
-            }
             try {
-                let loc = await Location.getCurrentPositionAsync({});
-                setLocationCoords({ lat: loc.coords.latitude, lng: loc.coords.longitude });
-                setPickup(`Current Location (${loc.coords.latitude.toFixed(2)}, ${loc.coords.longitude.toFixed(2)})`);
-            } catch (e) {
-                setPickup('Central Station (Default)');
-                setLocationCoords({ lat: 40.7527, lng: -73.9772 });
+                const { status: existingStatus } = await Notifications.getPermissionsAsync();
+                let finalStatus = existingStatus;
+                if (existingStatus !== 'granted') {
+                    const { status } = await Notifications.requestPermissionsAsync();
+                    finalStatus = status;
+                }
+
+                // Small delay to prevent OS dialog conflicts
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                let { status: locStatus } = await Location.requestForegroundPermissionsAsync();
+                if (locStatus !== 'granted') {
+                    setPickup('Times Square (Default)');
+                    setLocationCoords({ lat: 40.7580, lng: -73.9855 });
+                    return;
+                }
+                
+                try {
+                    let loc = await Location.getCurrentPositionAsync({
+                        accuracy: Location.Accuracy.Balanced,
+                    });
+                    setLocationCoords({ lat: loc.coords.latitude, lng: loc.coords.longitude });
+                    setPickup(`Current Location (${loc.coords.latitude.toFixed(2)}, ${loc.coords.longitude.toFixed(2)})`);
+                } catch (e) {
+                    console.error('Error getting current position in simulator:', e);
+                    setPickup('Central Station (Default)');
+                    setLocationCoords({ lat: 40.7527, lng: -73.9772 });
+                }
+            } catch (err) {
+                console.error('Error in simulator initialization:', err);
             }
         })();
 

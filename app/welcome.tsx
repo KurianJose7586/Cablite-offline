@@ -13,7 +13,7 @@ export default function WelcomeScreen() {
         setOnboarding(true);
 
         if (role === 'passenger') {
-            router.replace('/simulator'); // We will create this screen
+            router.replace('/passenger-home');
         } else {
             router.replace('/driver-home');
         }
