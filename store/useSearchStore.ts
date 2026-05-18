@@ -25,7 +25,8 @@ interface SearchState {
     setQuery: (query: string) => void;
 }
 
-const DB_NAME = 'vital_tier.db';
+// Renamed to v2 to force a fresh copy from assets and clear old cached files
+const DB_NAME = 'vital_tier_v2.db';
 
 export const useSearchStore = create<SearchState>((set, get) => ({
     isInitializing: false,
@@ -65,8 +66,9 @@ export const useSearchStore = create<SearchState>((set, get) => ({
             }
 
             if (shouldCopy) {
-                console.log('Copying real-world database from assets...');
-                const asset = Asset.fromModule(require('../assets/vital_tier.db'));
+                console.log('Copying real-world database (v2) from assets...');
+                // We use require to ensure metro includes the asset
+                const asset = Asset.fromModule(require('../assets/vital_tier_v2.db'));
                 await asset.downloadAsync();
                 
                 if (asset.localUri) {
@@ -78,6 +80,7 @@ export const useSearchStore = create<SearchState>((set, get) => ({
                         from: asset.localUri,
                         to: dbPath
                     });
+                    console.log('Successfully copied database to:', dbPath);
                 } else {
                     throw new Error('Could not get local URI for database asset');
                 }
@@ -112,7 +115,7 @@ export const useSearchStore = create<SearchState>((set, get) => ({
             // Split query into words and add wildcard to each
             const formattedQuery = query.trim().split(/\s+/).map(word => `${word}*`).join(' ');
 
-            const results = await db.getAllAsync<any>(`
+            let results = await db.getAllAsync<any>(`
                 SELECT p.* 
                 FROM pois p
                 JOIN pois_fts f ON p.id = f.rowid
@@ -120,6 +123,17 @@ export const useSearchStore = create<SearchState>((set, get) => ({
                 ORDER BY p.rank DESC
                 LIMIT 10
             `, [formattedQuery]);
+
+            // FALLBACK: If FTS returns nothing, try a standard LIKE query
+            if (results.length === 0) {
+                console.log('FTS returned no results for:', query, 'trying LIKE fallback...');
+                results = await db.getAllAsync<any>(`
+                    SELECT * FROM pois 
+                    WHERE name LIKE ? 
+                    ORDER BY rank DESC 
+                    LIMIT 10
+                `, [`%${query}%`]);
+            }
 
             const formattedResults: POI[] = results.map(row => ({
                 id: row.id,

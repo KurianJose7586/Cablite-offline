@@ -40,6 +40,13 @@ export class SocketService {
     }
 
     /**
+     * Check if a simulator is connected for a phone number
+     */
+    isSimulatorConnected(phoneNumber: string): boolean {
+        return this.passengerSockets.has(phoneNumber);
+    }
+
+    /**
      * Send simulated SMS to a registered passenger simulator
      */
     sendSimulatedSMS(phoneNumber: string, message: string): boolean {

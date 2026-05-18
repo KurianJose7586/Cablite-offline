@@ -1,7 +1,8 @@
 import { Request, Response } from 'express';
-import { parseSMS, SMSMessageType, isValidRideId } from '../utils/smsParser';
+import { parseSMS, SMSMessageType } from '../utils/smsParser';
 import { rideService } from '../services/rideService';
 import { smsService } from '../services/smsService';
+import { searchService } from '../services/searchService';
 import { logger } from '../utils/logger';
 import { prisma } from '../db/prisma';
 
@@ -41,17 +42,7 @@ export class SMSController {
                     body: Body,
                     error: error.message
                 });
-                await smsService.send(From, `Invalid message format. ${error.message}`);
-                res.status(200).send('<Response></Response>');
-                return;
-            }
-
-            // Validate ride ID
-            if (parsed.rideId && !isValidRideId(parsed.rideId)) {
-                await smsService.send(
-                    From,
-                    'Invalid Ride ID format. Must be 6-20 alphanumeric characters.'
-                );
+                await smsService.send(From, `ERR|Invalid format: ${error.message}`);
                 res.status(200).send('<Response></Response>');
                 return;
             }
@@ -59,9 +50,7 @@ export class SMSController {
             // Route to appropriate handler
             switch (parsed.type) {
                 case SMSMessageType.RIDE_REQUEST:
-                    if (!parsed.data) {
-                        throw new Error('Missing ride request data');
-                    }
+                    if (!parsed.data) throw new Error('Missing ride request data');
                     await rideService.createRideFromSMS(
                         From,
                         parsed.rideId,
@@ -74,7 +63,7 @@ export class SMSController {
 
                 case SMSMessageType.UPDATE_REQUEST:
                     if (!parsed.data || parsed.data.lat === undefined || parsed.data.lng === undefined) {
-                        await smsService.send(From, 'UPDATE requires location: UPDATE|RIDEID|LAT|LNG');
+                        await smsService.send(From, 'ERR|UPDATE requires location');
                         break;
                     }
                     await rideService.handleUpdateRequest(
@@ -91,34 +80,32 @@ export class SMSController {
 
                 case SMSMessageType.SEARCH_REQUEST:
                     if (!parsed.data?.query) {
-                        await smsService.send(From, 'SRCH requires a query: SRCH|LocationName');
+                        await smsService.send(From, 'ERR|SRCH requires query');
                         break;
                     }
-                    // Implement mock search logic for POC
                     logger.info('Handling Deep Search request', { query: parsed.data.query, from: From });
-                    // Simulate a delay and then reply
-                    setTimeout(async () => {
-                        const mockResult = `SEARCH_REPLY|${parsed.data?.query} (Mock)|28.6139|77.2090`;
-                        await smsService.send(From, mockResult);
-                    }, 2000);
+                    
+                    const result = await searchService.search(parsed.data.query);
+                    
+                    if (result) {
+                        // Reply with correct pipe delimiter: SEARCH_REPLY_v3|Name|Lat|Lng
+                        const now = new Date().toLocaleTimeString();
+                        const response = `SEARCH_REPLY_v3|${result.name} [${now}]|${result.lat}|${result.lng}`;
+                        await smsService.send(From, response);
+                    } else {
+                        await smsService.send(From, `ERR|No results found for: ${parsed.data.query}`);
+                    }
                     break;
 
                 case SMSMessageType.UNKNOWN:
-                    await smsService.send(
-                        From,
-                        'Unknown command. Use RIDEREQ, UPDATE, or CANCEL.'
-                    );
+                    await smsService.send(From, 'ERR|Unknown command');
                     break;
             }
 
-            // Respond to Twilio
             res.status(200).send('<Response></Response>');
 
         } catch (error: any) {
-            logger.error('Error processing SMS', {
-                error: error.message,
-                stack: error.stack
-            });
+            logger.error('Error processing SMS', { error: error.message });
             res.status(500).send('<Response></Response>');
         }
     }
