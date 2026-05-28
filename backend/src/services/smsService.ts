@@ -8,10 +8,16 @@ export class SMSService {
     private readonly sentTemplateId: string | undefined;
     private readonly twilioClient: any;
     private readonly twilioNumber: string | undefined;
+    private readonly androidGatewayIp: string | undefined;
+    private readonly androidGatewayPort: string | undefined;
 
     constructor() {
         this.sentApiKey = process.env.SENT_API_KEY;
         this.sentTemplateId = process.env.SENT_TEMPLATE_ID;
+        
+        // Android Gateway
+        this.androidGatewayIp = process.env.ANDROID_GATEWAY_IP;
+        this.androidGatewayPort = process.env.ANDROID_GATEWAY_PORT || '8080';
         
         // Initialize Twilio if credentials exist
         if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
@@ -25,7 +31,33 @@ export class SMSService {
      * Send SMS message - Automatically chooses available provider
      */
     async send(to: string, message: string): Promise<void> {
-        // 1. Try Simulator first - ONLY if a simulator is actually connected for this number
+        // 1. Try Android Gateway first (Physical SMS via MessageCore App)
+        if (this.androidGatewayIp) {
+            try {
+                const gatewayUrl = `http://${this.androidGatewayIp}:${this.androidGatewayPort}/send`;
+                await axios.post(gatewayUrl, {
+                    phoneNumber: to,
+                    message: message,
+                    simNumber: 1
+                }, { timeout: 5000 });
+                logger.info('SMS sent via Android Gateway', { to, message });
+                return;
+            } catch (error: any) {
+                logger.error('Android Gateway send failed', { error: error.message, ip: this.androidGatewayIp });
+                // Fall through to other providers
+            }
+        }
+
+        // 2. Try Hardware Gateway (Legacy Socket-based)
+        if (socketService.isHardwareGatewayConnected()) {
+            const sent = socketService.sendPhysicalSMS(to, message);
+            if (sent) {
+                logger.info('SMS sent via Hardware Gateway', { to, message });
+                return;
+            }
+        }
+
+        // 3. Try Simulator - ONLY if a simulator is actually connected for this number
         if (socketService.isSimulatorConnected(to)) {
             const simulated = socketService.sendSimulatedSMS(to, message);
             if (simulated) {
@@ -34,7 +66,7 @@ export class SMSService {
             }
         }
 
-        // 2. Try Twilio POC (if configured)
+        // 4. Try Twilio POC (if configured)
         if (this.twilioClient && this.twilioNumber) {
             try {
                 const twilioMsg = await this.twilioClient.messages.create({
@@ -50,7 +82,7 @@ export class SMSService {
             }
         }
 
-        // 3. Try Sent.dm (as fallback)
+        // 5. Try Sent.dm (as fallback)
         if (this.sentApiKey && this.sentApiKey !== 'your_sent_api_key_here' && this.sentTemplateId) {
             try {
                 const response = await axios.post('https://api.sent.dm/v3/messages', {

@@ -6,6 +6,8 @@ export class SocketService {
     private io: Server | null = null;
     // Map phone numbers to socket IDs for the simulator
     private passengerSockets: Map<string, string> = new Map();
+    // Hardware gateway socket ID
+    private hardwareGatewaySocket: string | null = null;
 
     init(server: HttpServer) {
         this.io = new Server(server, {
@@ -26,8 +28,22 @@ export class SocketService {
                 }
             });
 
+            // Hardware gateway registers
+            socket.on('register_hardware_gateway', (data: { token: string }) => {
+                if (data.token === 'HARDWARE_GW_001') {
+                    this.hardwareGatewaySocket = socket.id;
+                    logger.info('Hardware Gateway connected and authenticated');
+                }
+            });
+
             socket.on('disconnect', () => {
                 logger.info(`Socket disconnected: ${socket.id}`);
+                
+                if (socket.id === this.hardwareGatewaySocket) {
+                    this.hardwareGatewaySocket = null;
+                    logger.info('Hardware Gateway disconnected');
+                }
+
                 // Remove from map if exists
                 for (const [phone, id] of this.passengerSockets.entries()) {
                     if (id === socket.id) {
@@ -37,6 +53,30 @@ export class SocketService {
                 }
             });
         });
+    }
+
+    /**
+     * Check if hardware gateway is online
+     */
+    isHardwareGatewayConnected(): boolean {
+        return this.hardwareGatewaySocket !== null;
+    }
+
+    /**
+     * Send command to hardware gateway to send a physical SMS
+     */
+    sendPhysicalSMS(to: string, message: string): boolean {
+        if (!this.io || !this.hardwareGatewaySocket) {
+            return false;
+        }
+
+        this.io.to(this.hardwareGatewaySocket).emit('send_sms', {
+            to,
+            message
+        });
+        
+        logger.info(`Command sent to Hardware Gateway: ${to}`);
+        return true;
     }
 
     /**

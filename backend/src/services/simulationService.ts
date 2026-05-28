@@ -3,9 +3,9 @@ import { logger } from '../utils/logger';
 import { eventBus } from './eventBus';
 
 
-// Default city center (e.g., Bangalore)
-const CENTER_LAT = 12.9716;
-const CENTER_LNG = 77.5946;
+// Default city center (Delhi test area)
+const CENTER_LAT = 28.5607;
+const CENTER_LNG = 77.2460;
 
 class SimulationService {
     private ghostDriverIds: string[] = [];
@@ -112,7 +112,7 @@ class SimulationService {
         eventBus.onRideRequested(async (event) => {
             logger.info('Simulation Service detected a new ride request', { rideId: event.rideId });
             
-            // Wait 3 seconds to simulate driver reaction time
+            // Wait 5 seconds to simulate driver reaction time
             setTimeout(async () => {
                 try {
                     const ride = await prisma.ride.findUnique({ where: { id: event.rideId } });
@@ -171,7 +171,7 @@ class SimulationService {
                 } catch (error) {
                     logger.warn('Ghost driver failed to accept ride', error);
                 }
-            }, 60000);
+            }, 5000);
         });
     }
 }

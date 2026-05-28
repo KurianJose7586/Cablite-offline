@@ -22,7 +22,8 @@ CabLite is an **offline-first ride-hailing platform** designed for environments 
 - **Technical Choice:** Each city shard is an independent `.db` connection to avoid brittle `ATTACH DATABASE` native bugs in Expo/React Native.
 
 ### 2. Communication Layer (Semantic SMS Handshake)
-- **Flow:** `App -> SMS -> Twilio -> Backend -> Socket.io -> Driver`.
+- **Current Flow (Transitioning):** `App -> SMS -> [Twilio / Hardware Gateway] -> Backend -> Socket.io -> Driver`.
+- **Hardware Shift:** Moving from Twilio to a self-hosted **ESP32 + SIM800L Gateway** to reduce costs and increase decentralization.
 - **Search Fallback:** If local SQLite fails, a `SRCH|Query` SMS is sent to the backend to leverage Google/OSM search and reply via SMS.
 - **Update Logic:** Passengers have a rate-limited "Update" button to request driver location via SMS during active rides.
 

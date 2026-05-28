@@ -12,38 +12,70 @@ export class SMSController {
      * POST /webhook/sms
      */
     async handleIncomingSMS(req: Request, res: Response): Promise<void> {
+        logger.debug('Raw SMS Webhook received', { body: req.body, headers: req.headers });
         try {
-            const { MessageSid, From, Body } = req.body;
+            // Support multiple formats:
+            // 1. InfiniReach: { event: "message.received", data: { from, message, messageId } }
+            // 2. Twilio: { From, Body, MessageSid }
+            // 3. Android Gateway: { phoneNumber, message, messageId }
+            
+            let from, body, messageId;
+            const isInfiniReach = req.body.event === 'message.received' || req.body.event === 'message.inbound';
+
+            if (isInfiniReach) {
+                from = req.body.data?.from;
+                body = req.body.data?.body || req.body.data?.message;
+                messageId = req.body.data?.messageId;
+            } else {
+                // Ignore other InfiniReach events (sent, delivered, failed)
+                if (req.body.event && !isInfiniReach) {
+                    res.status(200).send('OK');
+                    return;
+                }
+
+                from = req.body.phoneNumber || req.body.From;
+                body = req.body.message || req.body.Body;
+                messageId = req.body.messageId || req.body.MessageSid;
+            }
+
+            if (!from || !body) {
+                logger.warn('Received malformed SMS webhook', { body: req.body });
+                res.status(400).send('Malformed request');
+                return;
+            }
 
             logger.info('Incoming SMS', {
-                from: From,
-                body: Body,
-                messageSid: MessageSid
+                from,
+                body,
+                messageId,
+                source: isInfiniReach ? 'InfiniReach' : (req.body.deviceId ? 'AndroidGateway' : 'Twilio')
             });
 
             // Check for duplicate message (idempotency)
-            const existingRide = await prisma.ride.findUnique({
-                where: { twilioMessageSid: MessageSid }
-            });
+            if (messageId) {
+                const existingRide = await prisma.ride.findUnique({
+                    where: { twilioMessageSid: messageId }
+                });
 
-            if (existingRide) {
-                logger.info('Duplicate SMS detected, ignoring', { messageSid: MessageSid });
-                res.status(200).send('<Response></Response>');
-                return;
+                if (existingRide) {
+                    logger.info('Duplicate SMS detected, ignoring', { messageId });
+                    res.status(200).send('OK');
+                    return;
+                }
             }
 
             // Parse SMS
             let parsed;
             try {
-                parsed = parseSMS(Body);
+                parsed = parseSMS(body);
             } catch (error: any) {
                 logger.warn('SMS parsing failed', {
-                    from: From,
-                    body: Body,
+                    from,
+                    body,
                     error: error.message
                 });
-                await smsService.send(From, `ERR|Invalid format: ${error.message}`);
-                res.status(200).send('<Response></Response>');
+                await smsService.send(from, `ERR|Invalid format: ${error.message}`);
+                res.status(200).send('OK');
                 return;
             }
 
@@ -52,22 +84,22 @@ export class SMSController {
                 case SMSMessageType.RIDE_REQUEST:
                     if (!parsed.data) throw new Error('Missing ride request data');
                     await rideService.createRideFromSMS(
-                        From,
+                        from,
                         parsed.rideId,
                         parsed.data.lat!,
                         parsed.data.lng!,
                         parsed.data.destination!,
-                        MessageSid
+                        messageId || `LOCAL-${Date.now()}`
                     );
                     break;
 
                 case SMSMessageType.UPDATE_REQUEST:
                     if (!parsed.data || parsed.data.lat === undefined || parsed.data.lng === undefined) {
-                        await smsService.send(From, 'ERR|UPDATE requires location');
+                        await smsService.send(from, 'ERR|UPDATE requires location');
                         break;
                     }
                     await rideService.handleUpdateRequest(
-                        From,
+                        from,
                         parsed.rideId,
                         parsed.data.lat,
                         parsed.data.lng
@@ -75,15 +107,15 @@ export class SMSController {
                     break;
 
                 case SMSMessageType.CANCEL_REQUEST:
-                    await rideService.handleCancelRequest(From, parsed.rideId);
+                    await rideService.handleCancelRequest(from, parsed.rideId);
                     break;
 
                 case SMSMessageType.SEARCH_REQUEST:
                     if (!parsed.data?.query) {
-                        await smsService.send(From, 'ERR|SRCH requires query');
+                        await smsService.send(from, 'ERR|SRCH requires query');
                         break;
                     }
-                    logger.info('Handling Deep Search request', { query: parsed.data.query, from: From });
+                    logger.info('Handling Deep Search request', { query: parsed.data.query, from });
                     
                     const result = await searchService.search(parsed.data.query);
                     
@@ -91,22 +123,23 @@ export class SMSController {
                         // Reply with correct pipe delimiter: SEARCH_REPLY_v3|Name|Lat|Lng
                         const now = new Date().toLocaleTimeString();
                         const response = `SEARCH_REPLY_v3|${result.name} [${now}]|${result.lat}|${result.lng}`;
-                        await smsService.send(From, response);
+                        await smsService.send(from, response);
                     } else {
-                        await smsService.send(From, `ERR|No results found for: ${parsed.data.query}`);
+                        await smsService.send(from, `ERR|No results found for: ${parsed.data.query}`);
                     }
                     break;
 
                 case SMSMessageType.UNKNOWN:
-                    await smsService.send(From, 'ERR|Unknown command');
+                    await smsService.send(from, 'ERR|Unknown command');
                     break;
             }
 
-            res.status(200).send('<Response></Response>');
+            // InfiniReach and Gateway apps prefer plain OK
+            res.status(200).send('OK');
 
         } catch (error: any) {
             logger.error('Error processing SMS', { error: error.message });
-            res.status(500).send('<Response></Response>');
+            res.status(500).send('Error');
         }
     }
 }

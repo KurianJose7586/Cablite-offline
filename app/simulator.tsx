@@ -11,7 +11,7 @@ import { BlurView } from 'expo-blur';
 
 const isExpoGo = Constants.appOwnership === AppOwnership.Expo;
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.10.153.151:3000';
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.8:3000';
 const SIMULATED_PHONE = '+1234567890';
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 

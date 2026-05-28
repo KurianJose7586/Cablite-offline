@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import http from 'http';
+import axios from 'axios';
 import { logger } from './utils/logger';
 import webhookRoutes from './routes/webhook';
 import driverRoutes from './routes/driver';
@@ -39,6 +40,39 @@ app.get('/health', (_req, res) => {
         timestamp: new Date().toISOString(),
         uptime: process.uptime()
     });
+});
+
+app.get('/health/sms', async (_req, res) => {
+    const gatewayIp = process.env.ANDROID_GATEWAY_IP;
+    const gatewayPort = process.env.ANDROID_GATEWAY_PORT || '8080';
+    
+    if (!gatewayIp) {
+        return res.status(503).json({
+            status: 'offline',
+            error: 'ANDROID_GATEWAY_IP not configured'
+        });
+    }
+
+    try {
+        const start = Date.now();
+        // Ping the gateway base URL
+        await axios.get(`http://${gatewayIp}:${gatewayPort}`, { timeout: 3000 });
+        const latency = Date.now() - start;
+        
+        return res.json({
+            status: 'online',
+            latency: `${latency}ms`,
+            gateway: `http://${gatewayIp}:${gatewayPort}`,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error: any) {
+        return res.status(503).json({
+            status: 'offline',
+            error: error.message,
+            gateway: `http://${gatewayIp}:${gatewayPort}`,
+            timestamp: new Date().toISOString()
+        });
+    }
 });
 
 // Routes (to be added)
